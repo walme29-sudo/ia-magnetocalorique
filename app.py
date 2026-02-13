@@ -81,7 +81,7 @@ if file:
 
            # --- Remplacez la section tab1 par celle-ci ---
             with tab1:
-            st.subheader("Visualisation des Données Magnétiques")
+                st.subheader("Visualisation des Données Magnétiques")
     
                 # Création de deux colonnes pour mettre les graphiques côte à côte
                     col_graph1, col_graph2 = st.columns(2)
@@ -103,7 +103,7 @@ if file:
                 # On réduit la hauteur avec le paramètre height
                 st.line_chart(df_ds, height=300)
 
-            st.caption("💡 Les graphiques sont affichés côte à côte pour une meilleure lisibilité sur écran large.")
+                st.caption("💡 Les graphiques sont affichés côte à côte pour une meilleure lisibilité sur écran large.")
 
 
             with tab2:
@@ -146,5 +146,6 @@ if file:
         st.error(f"Erreur : {e}")
 else:
     st.info("Veuillez charger un fichier CSV.")
+
 
 

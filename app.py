@@ -83,25 +83,25 @@ if file:
             with tab1:
             st.subheader("Visualisation des Données Magnétiques")
     
-            # Création de deux colonnes pour mettre les graphiques côte à côte
-            col_graph1, col_graph2 = st.columns(2)
+                # Création de deux colonnes pour mettre les graphiques côte à côte
+                    col_graph1, col_graph2 = st.columns(2)
     
-                with col_graph1:
-                st.markdown("**Magnétisation (Mesures vs IA)**")
-                df_m_complet = pd.DataFrame({
-                    "M (1T)": M_matrix[:, 0],
-                    "M (2T)": M_matrix[:, 1],
-                    "M (3T)": M_matrix[:, 2],
-                    "M (5T) - IA": M_predicted_5T
-                }, index=T)
-            # On réduit la hauteur avec le paramètre height
-            st.line_chart(df_m_complet, height=300)
+                        with col_graph1:
+                        st.markdown("**Magnétisation (Mesures vs IA)**")
+                        df_m_complet = pd.DataFrame({
+                        "M (1T)": M_matrix[:, 0],
+                        "M (2T)": M_matrix[:, 1],
+                        "M (3T)": M_matrix[:, 2],
+                        "M (5T) - IA": M_predicted_5T
+                        }, index=T)
+                # On réduit la hauteur avec le paramètre height
+                st.line_chart(df_m_complet, height=300)
     
-                with col_graph2:
-                st.markdown("**Variation d'Entropie ΔS**")
-                df_ds = pd.DataFrame({"ΔS (J/kg·K)": deltaS_mesure}, index=T)
-            # On réduit la hauteur avec le paramètre height
-            st.line_chart(df_ds, height=300)
+                        with col_graph2:
+                        st.markdown("**Variation d'Entropie ΔS**")
+                        df_ds = pd.DataFrame({"ΔS (J/kg·K)": deltaS_mesure}, index=T)
+                # On réduit la hauteur avec le paramètre height
+                st.line_chart(df_ds, height=300)
 
             st.caption("💡 Les graphiques sont affichés côte à côte pour une meilleure lisibilité sur écran large.")
 
@@ -146,4 +146,5 @@ if file:
         st.error(f"Erreur : {e}")
 else:
     st.info("Veuillez charger un fichier CSV.")
+
 

@@ -130,8 +130,8 @@ if file:
             ax_n.set_title("Exposant n(T)"); st.pyplot(fig_n)
 
     with tab3:
-    st.subheader("Analyse de Transition & Modélisation Linéaire")
-    col_t3_1, col_t3_2 = st.columns(2)
+        st.subheader("Analyse de Transition & Modélisation Linéaire")
+        col_t3_1, col_t3_2 = st.columns(2)
 
         with col_t3_1:
             st.markdown("**Arrott Plot & Fit Linéaire ($y = ax + b$)**")
@@ -208,4 +208,5 @@ if file:
     st.download_button("📥 Export Excel", data=to_excel_full(df_export, df_stats), file_name="Magnetocaloric_Expert.xlsx")
 else:
     st.info("Veuillez charger un fichier CSV pour démarrer.")
+
 

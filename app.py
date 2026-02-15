@@ -126,8 +126,13 @@ if file:
     # ================= ONGLETS (TABS) =================
     tab1, tab2, tab3, tab4 = st.tabs(["📈 Aimantation", "❄️ Thermodynamique", "🧲 Arrott & Master", "🧬 Comparaison 3D"])
 
-    with tab1:
-        df_m = pd.DataFrame({"1T":M_matrix[:,0], "2T":M_matrix[:,1], "3T":M_matrix[:,2], f"{H_user}T (IA)":M_user}, index=T)
+        with tab1:
+        df_m = pd.DataFrame({
+            "1T": M_matrix[:,0],
+            "2T": M_matrix[:,1],
+            "3T": M_matrix[:,2],
+            f"{H_user:.1f}T (IA)": M_user
+        }, index=T)
         st.line_chart(df_m)
 
     with tab2:
@@ -136,82 +141,57 @@ if file:
             fig_ds, ax_ds = plt.subplots(figsize=(5,3.5))
             ax_ds.plot(T, deltaS, color='blue', lw=2)
             ax_ds.set_title("Variation d'Entropie ΔS")
-            ax_ds.set_xlabel("T (K)"); ax_ds.set_ylabel("ΔS")
+            ax_ds.set_xlabel("T (K)")
+            ax_ds.set_ylabel("ΔS")
             st.pyplot(fig_ds)
         with c_b:
             fig_n, ax_n = plt.subplots(figsize=(5,3.5))
             ax_n.plot(T, n_T, color='green')
             ax_n.axvline(Tc, color='red', ls='--')
             ax_n.set_title("Exposant n(T)")
-            ax_n.set_xlabel("T (K)"); ax_n.set_ylabel("n")
+            ax_n.set_xlabel("T (K)")
+            ax_n.set_ylabel("n")
             st.pyplot(fig_n)
 
-            with tab3:
+    with tab3:
         st.subheader("Analyse de Transition de Phase")
         col_tab3_1, col_tab3_2 = st.columns(2)
 
-        # -------- Arrott Plot (H/M vs M²) --------
+        # -------- Arrott Plot --------
         with col_tab3_1:
-            st.markdown("**Arrott Plot (Critère de Banerjee)**")
+            st.markdown("**Arrott Plot (H/M vs M²)**")
             fig_arrott, ax_arrott = plt.subplots(figsize=(5, 4))
-            
             H_plot_list = [1, 2, 3, H_user]
             M_plot_list = [M_matrix[:,0], M_matrix[:,1], M_matrix[:,2], M_user]
-            
             for h_val, m_val in zip(H_plot_list, M_plot_list):
-                mask = (m_val != 0) # Éviter division par zéro
-                m2 = m_val[mask]**2
-                hoverm = h_val / m_val[mask]
-                ax_arrott.plot(m2, hoverm, label=f"{h_val:.1f}T")
-            
+                mask = (m_val != 0)
+                ax_arrott.plot(m_val[mask]**2, h_val / m_val[mask], label=f"{h_val:.1f}T")
             ax_arrott.set_xlabel("$M^2$")
             ax_arrott.set_ylabel("$H/M$")
             ax_arrott.legend()
             st.pyplot(fig_arrott)
 
-        # -------- Master Curve (Normalisation) --------
+        # -------- Master Curve --------
         with col_tab3_2:
-            st.markdown("**Master Curve (Scaling Loi d'échelle)**")
+            st.markdown("**Master Curve (Scaling)**")
             fig_master, ax_master = plt.subplots(figsize=(5, 4))
-            
-            # Calcul des points de référence pour theta
             idx_half = np.where(np.abs(deltaS) >= Smax/2)[0]
             if len(idx_half) > 1:
-                t_r1 = T[idx_half[0]]
-                t_r2 = T[idx_half[-1]]
-                
+                t_r1, t_r2 = T[idx_half[0]], T[idx_half[-1]]
                 for h_val, m_val in zip(H_plot_list, M_plot_list):
-                    # Calcul DeltaS local pour chaque champ
-                    ds_local = np.abs(np.gradient(m_val, T))
-                    ds_max_local = np.max(ds_local) if np.max(ds_local) != 0 else 1
-                    
-                    # Définition de la variable réduite theta
-                    theta = np.zeros_like(T)
-                    for i in range(len(T)):
-                        if T[i] <= Tc:
-                            theta[i] = -(T[i] - Tc) / (t_r1 - Tc + 1e-6)
-                        else:
-                            theta[i] = (T[i] - Tc) / (t_r2 - Tc + 1e-6)
-                    
-                    ax_master.plot(theta, ds_local/ds_max_local, label=f"{h_val:.1f}T")
-                
-                ax_master.set_xlabel("$\\theta$ (Variable réduite)")
+                    ds_l = np.abs(np.gradient(m_val, T))
+                    ds_m_l = np.max(ds_l) if np.max(ds_l) != 0 else 1
+                    theta = np.where(T <= Tc, -(T - Tc) / (t_r1 - Tc + 1e-6), (T - Tc) / (t_r2 - Tc + 1e-6))
+                    ax_master.plot(theta, ds_l/ds_m_l, label=f"{h_val:.1f}T")
+                ax_master.set_xlabel("$\\theta$")
                 ax_master.set_ylabel("$\\Delta S / \\Delta S_{max}$")
                 ax_master.legend()
                 st.pyplot(fig_master)
             else:
-                st.warning("Données insuffisantes pour T_r1/T_r2")
-
-        # Boutons d'export PDF
-        st.divider()
-        c_p1, c_p2 = st.columns(2)
-        c_p1.download_button("📥 Arrott Plot PDF", data=plot_to_pdf(fig_arrott), file_name="Arrott_Plot.pdf")
-        c_p2.download_button("📥 Master Curve PDF", data=plot_to_pdf(fig_master), file_name="Master_Curve.pdf")
-
+                st.warning("Données insuffisantes pour Master Curve")
 
     with tab4:
         st.subheader("🧬 Comparaison des Surfaces 3D (Modèle A vs B)")
-        
         # Entraînement Modèle B
         model_B = MLPRegressor(hidden_layer_sizes=(nodes_m2, nodes_m2), 
                              activation='relu', solver='adam', max_iter=5000, random_state=1)
@@ -231,21 +211,12 @@ if file:
         fig_3d = go.Figure()
         fig_3d.add_trace(go.Surface(z=Z_A, x=T, y=H_surf_range, colorscale='Viridis', name='Modèle A', opacity=0.9))
         fig_3d.add_trace(go.Surface(z=Z_B, x=T, y=H_surf_range, colorscale='Reds', name='Modèle B', opacity=0.5, showscale=False))
-        
         fig_3d.update_layout(scene=dict(xaxis_title='T (K)', yaxis_title='H (T)', zaxis_title='M'), 
                              height=700, margin=dict(l=0, r=0, b=0, t=40))
         st.plotly_chart(fig_3d, use_container_width=True)
 
-    # ================= EXPORTS =================
-    st.divider()
-    st.subheader("📥 Exportation des Résultats")
-    
-    df_export = pd.DataFrame({"T":T, "M_1T":M_matrix[:,0], f"M_{H_user}T":M_user, "DeltaS":deltaS, "n_T":n_T})
-    df_stats = pd.DataFrame({"Paramètre":["Smax", "RCP", "RC", "n_Tc", "Tc"], "Valeur":[Smax, RCP, RC, n_exponent, Tc]})
-    
-    btn_ex = st.download_button("Excel Complet", data=to_excel_full(df_export, df_stats), file_name="Resultats_IA.xlsx")
-
 else:
     st.info("Veuillez charger un fichier CSV pour démarrer l'analyse.")
+
 
 

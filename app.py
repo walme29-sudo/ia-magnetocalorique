@@ -6,15 +6,15 @@ from sklearn.neural_network import MLPRegressor
 from sklearn.preprocessing import StandardScaler
 from io import BytesIO
 
-# ================= CONFIGURATION =================
+# ================= CONFIG =================
 st.set_page_config(page_title="IA Magnétocalorique - ISSAT", layout="wide")
 
 # ================= EXPORT FUNCTIONS =================
 def to_excel_full(df_main, df_stats):
     output = BytesIO()
     with pd.ExcelWriter(output, engine='openpyxl') as writer:
-        df_main.to_excel(writer, sheet_name='Data & Predictions')
-        df_stats.to_excel(writer, sheet_name='Thermo Parameters', index=False)
+        df_main.to_excel(writer, sheet_name='Data_Predictions')
+        df_stats.to_excel(writer, sheet_name='Thermo_Parameters', index=False)
     return output.getvalue()
 
 def plot_to_pdf(fig):
@@ -23,17 +23,17 @@ def plot_to_pdf(fig):
     return output.getvalue()
 
 # ================= HEADER =================
-col_logo, col_title = st.columns([1, 4])
+col_logo, col_title = st.columns([1, 5])
 
 with col_logo:
     try:
         st.image("logo.png", width=120)
     except:
-        st.info("📍 ISSAT Kasserine")
+        st.info("ISSAT Kasserine")
 
 with col_title:
-    st.title("🧲 Neural Network Global - Effet Magnétocalorique")
-    st.markdown("**Développeur :** DALHOUMI WALID")
+    st.title("🧲 IA Magnétocalorique - Neural Network Global")
+    st.markdown("**Développeur : DALHOUMI WALID**")
 
 st.divider()
 
@@ -43,25 +43,20 @@ file = st.file_uploader("Charger fichier CSV (T, M_1T, M_2T, M_3T)", type=["csv"
 if file:
 
     data = pd.read_csv(file).dropna()
-    cols_needed = ["T", "M_1T", "M_2T", "M_3T"]
+    required = ["T", "M_1T", "M_2T", "M_3T"]
 
-    if not all(c in data.columns for c in cols_needed):
+    if not all(col in data.columns for col in required):
         st.error("Colonnes requises : T, M_1T, M_2T, M_3T")
         st.stop()
 
-    # ================= DATA =================
     T = data["T"].values
     M_matrix = data[["M_1T", "M_2T", "M_3T"]].values
-    H_values = np.array([1, 2, 3])
+    H_values = np.array([1,2,3])
 
     # ================= GLOBAL NN =================
     T_grid, H_grid = np.meshgrid(T, H_values)
 
-    X = np.column_stack([
-        T_grid.ravel(),
-        H_grid.ravel()
-    ])
-
+    X = np.column_stack([T_grid.ravel(), H_grid.ravel()])
     y = M_matrix.T.ravel()
 
     scaler_X = StandardScaler()
@@ -71,7 +66,7 @@ if file:
     y_scaled = scaler_y.fit_transform(y.reshape(-1,1)).ravel()
 
     model = MLPRegressor(
-        hidden_layer_sizes=(128, 128),
+        hidden_layer_sizes=(128,128),
         activation='relu',
         solver='adam',
         max_iter=6000,
@@ -83,23 +78,21 @@ if file:
     # ================= PREDICTION 5T =================
     H_pred = np.full_like(T, 5)
     X_pred = np.column_stack([T, H_pred])
-
     X_pred_scaled = scaler_X.transform(X_pred)
-    pred_scaled = model.predict(X_pred_scaled)
 
     M_5T = scaler_y.inverse_transform(
-        pred_scaled.reshape(-1,1)
+        model.predict(X_pred_scaled).reshape(-1,1)
     ).ravel()
 
     # ================= CALCUL ΔS =================
-    dM_dT_1 = np.gradient(M_matrix[:, 0], T)
-    dM_dT_2 = np.gradient(M_matrix[:, 1], T)
-    dM_dT_3 = np.gradient(M_matrix[:, 2], T)
+    dM_dT_1 = np.gradient(M_matrix[:,0], T)
+    dM_dT_2 = np.gradient(M_matrix[:,1], T)
+    dM_dT_3 = np.gradient(M_matrix[:,2], T)
     dM_dT_5 = np.gradient(M_5T, T)
 
     deltaS = np.trapezoid(
         [dM_dT_1, dM_dT_2, dM_dT_3, dM_dT_5],
-        x=[1, 2, 3, 5],
+        x=[1,2,3,5],
         axis=0
     )
 
@@ -107,9 +100,9 @@ if file:
     Tc = T[np.argmax(np.abs(deltaS))]
 
     # ================= RCP =================
-    indices_fwhm = np.where(np.abs(deltaS) >= Smax/2)[0]
-    if len(indices_fwhm) > 1:
-        RCP = Smax * (T[indices_fwhm[-1]] - T[indices_fwhm[0]])
+    indices = np.where(np.abs(deltaS) >= Smax/2)[0]
+    if len(indices) > 1:
+        RCP = Smax * (T[indices[-1]] - T[indices[0]])
     else:
         RCP = 0
 
@@ -117,8 +110,8 @@ if file:
     RC = np.trapezoid(np.abs(deltaS), T)
 
     # ================= EXPOSANT n =================
-    DeltaS_H = []
     H_list = np.array([1,2,3,5])
+    DeltaS_H = []
 
     for H in H_list:
         X_temp = np.column_stack([T, np.full_like(T, H)])
@@ -126,7 +119,6 @@ if file:
         M_temp = scaler_y.inverse_transform(
             model.predict(X_temp_scaled).reshape(-1,1)
         ).ravel()
-
         dM_dT = np.gradient(M_temp, T)
         DeltaS_H.append(np.max(np.abs(dM_dT)))
 
@@ -134,22 +126,22 @@ if file:
     coeffs = np.polyfit(np.log(H_list), np.log(DeltaS_H), 1)
     n_exponent = coeffs[0]
 
-    # ================= DISPLAY =================
+    # ================= METRICS =================
     st.subheader("Paramètres Thermodynamiques")
 
-    col1, col2, col3, col4, col5 = st.columns(5)
-    col1.metric("ΔS Max", f"{Smax:.4f}")
-    col2.metric("RCP", f"{RCP:.2f}")
-    col3.metric("RC", f"{RC:.2f}")
-    col4.metric("n exponent", f"{n_exponent:.3f}")
-    col5.metric("Tc (K)", f"{Tc:.1f}")
+    c1,c2,c3,c4,c5 = st.columns(5)
+    c1.metric("ΔS Max", f"{Smax:.4f}")
+    c2.metric("RCP", f"{RCP:.2f}")
+    c3.metric("RC", f"{RC:.2f}")
+    c4.metric("n exponent", f"{n_exponent:.3f}")
+    c5.metric("Tc (K)", f"{Tc:.1f}")
 
-    # ================= GRAPHIQUES =================
-    tab1, tab2, tab3 = st.tabs(
-    ["📈 Magnetisation", 
-     "❄ ΔS Curves", 
-     "🧲 Arrott & Master Curve"]
-    )
+    # ================= TABS =================
+    tab1, tab2, tab3 = st.tabs([
+        "📈 Magnetisation",
+        "❄ ΔS Curve",
+        "🧲 Arrott & Master"
+    ])
 
     with tab1:
         df_m = pd.DataFrame({
@@ -166,69 +158,49 @@ if file:
 
     with tab3:
 
-    st.subheader("Arrott Plot (H/M vs M²)")
+        st.subheader("Arrott Plot (H/M vs M²)")
 
-    fig_arrott, ax_arrott = plt.subplots(figsize=(7,5))
+        fig_arrott, ax_arrott = plt.subplots(figsize=(6,4))
+        for i,H in enumerate([1,2,3]):
+            M = M_matrix[:,i]
+            ax_arrott.plot(M**2, H/M, label=f"{H} T")
 
-    for i, H in enumerate([1,2,3]):
-        M = M_matrix[:, i]
-        ax_arrott.plot(M**2, H/M, label=f"{H} T")
+        ax_arrott.set_xlabel("M²")
+        ax_arrott.set_ylabel("H/M")
+        ax_arrott.legend()
+        st.pyplot(fig_arrott)
 
-    ax_arrott.set_xlabel("M²")
-    ax_arrott.set_ylabel("H/M")
-    ax_arrott.legend()
+        st.subheader("Master Curve Universelle")
 
-    st.pyplot(fig_arrott)
+        deltaS_norm = deltaS / np.max(np.abs(deltaS))
+        theta = (T - Tc) / (np.max(T) - np.min(T))
 
-    # ================= MASTER CURVE =================
+        fig_master, ax_master = plt.subplots(figsize=(6,4))
+        ax_master.plot(theta, deltaS_norm)
+        ax_master.set_xlabel("θ (Température réduite)")
+        ax_master.set_ylabel("ΔS / ΔSmax")
+        st.pyplot(fig_master)
 
-    st.subheader("Master Curve Universelle")
+        colA,colB = st.columns(2)
+        colA.download_button(
+            "📥 Arrott PDF",
+            data=plot_to_pdf(fig_arrott),
+            file_name="Arrott_Plot.pdf",
+            mime="application/pdf"
+        )
 
-    deltaS_norm = deltaS / np.max(np.abs(deltaS))
+        colB.download_button(
+            "📥 Master Curve PDF",
+            data=plot_to_pdf(fig_master),
+            file_name="Master_Curve.pdf",
+            mime="application/pdf"
+        )
 
-    # Réduction température
-    T_r1 = T[np.where(deltaS >= Smax/2)[0][0]]
-    T_r2 = T[np.where(deltaS >= Smax/2)[0][-1]]
-
-    theta = np.zeros_like(T)
-
-    for i in range(len(T)):
-        if T[i] < Tc:
-            theta[i] = -(Tc - T[i]) / (Tc - T_r1)
-        else:
-            theta[i] = (T[i] - Tc) / (T_r2 - Tc)
-
-    fig_master, ax_master = plt.subplots(figsize=(7,5))
-    ax_master.plot(theta, deltaS_norm)
-    ax_master.set_xlabel("θ (Température réduite)")
-    ax_master.set_ylabel("ΔS / ΔSmax")
-
-    st.pyplot(fig_master)
-
-    # ================= EXPORT PDF =================
-
-    col_pdf1, col_pdf2 = st.columns(2)
-
-    col_pdf1.download_button(
-        "📥 Télécharger Arrott PDF",
-        data=plot_to_pdf(fig_arrott),
-        file_name="Arrott_Plot.pdf",
-        mime="application/pdf"
-    )
-
-    col_pdf2.download_button(
-        "📥 Télécharger Master Curve PDF",
-        data=plot_to_pdf(fig_master),
-        file_name="Master_Curve.pdf",
-        mime="application/pdf"
-    )
-
-
-    # ================= EXPORT =================
-    st.subheader("Téléchargement")
+    # ================= EXPORT EXCEL =================
+    st.subheader("Téléchargement Excel")
 
     df_export = pd.DataFrame({
-        "T (K)": T,
+        "T": T,
         "M_1T": M_matrix[:,0],
         "M_2T": M_matrix[:,1],
         "M_3T": M_matrix[:,2],
@@ -237,32 +209,16 @@ if file:
     })
 
     df_stats = pd.DataFrame({
-        "Paramètre": ["Delta S Max", "RCP", "RC", "n exponent", "Tc"],
-        "Valeur": [Smax, RCP, RC, n_exponent, Tc]
+        "Parameter": ["DeltaS Max","RCP","RC","n exponent","Tc"],
+        "Value": [Smax,RCP,RC,n_exponent,Tc]
     })
 
-    fig, ax = plt.subplots(figsize=(8,5))
-    ax.plot(T, deltaS)
-    ax.set_xlabel("Temperature (K)")
-    ax.set_ylabel("ΔS")
-    ax.set_title("Variation d'Entropie (1→5T)")
-
-    col_ex, col_pdf = st.columns(2)
-
-    col_ex.download_button(
-        "📥 Télécharger Excel",
+    st.download_button(
+        "📥 Télécharger Excel Complet",
         data=to_excel_full(df_export, df_stats),
-        file_name="Magnetocaloric_Results_Walid.xlsx",
+        file_name="Magnetocaloric_Final_Walid.xlsx",
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-    )
-
-    col_pdf.download_button(
-        "📥 Télécharger PDF Courbe",
-        data=plot_to_pdf(fig),
-        file_name="DeltaS_Curve_Walid.pdf",
-        mime="application/pdf"
     )
 
 else:
     st.info("Veuillez charger un fichier CSV.")
-

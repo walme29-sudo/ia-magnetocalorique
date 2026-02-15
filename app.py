@@ -252,26 +252,26 @@ if file:
     from mpl_toolkits.mplot3d import Axes3D
 
     with tab4:
-    st.subheader("🧬 Surface 3D M(T,H)")
+        st.subheader("🧬 Surface 3D M(T,H)")
 
-    # grid champs
-    H_surface = np.linspace(1, H_user, 30)
-    T_surface = T
+        # grid champs
+        H_surface = np.linspace(1, H_user, 30)
+        T_surface = T
 
-    T_grid, H_grid = np.meshgrid(T_surface, H_surface)
+        T_grid, H_grid = np.meshgrid(T_surface, H_surface)
 
-    X_surface = np.column_stack([
+        X_surface = np.column_stack([
         T_grid.ravel(),
         H_grid.ravel()
-    ])
+        ])
 
-    X_surface_scaled = scaler_X.transform(X_surface)
+        X_surface_scaled = scaler_X.transform(X_surface)
 
-    M_surface = scaler_y.inverse_transform(
+        M_surface = scaler_y.inverse_transform(
         model.predict(X_surface_scaled).reshape(-1,1)
-    ).ravel()
+        ).ravel()
 
-    M_surface = M_surface.reshape(len(H_surface), len(T_surface))
+        M_surface = M_surface.reshape(len(H_surface), len(T_surface))
 
     fig = plt.figure(figsize=(6,4))
     ax = fig.add_subplot(111, projection='3d')
@@ -287,5 +287,6 @@ if file:
 
 
 else:
-    st.info("Upload your CSV file.")
+st.info("Upload your CSV file.")
+
 

@@ -137,6 +137,30 @@ if file:
     df_ex = pd.DataFrame({"T":T,"M_pred":M_pred,"ΔS":deltaS})
     df_st = pd.DataFrame({"Param":["Smax","RCP","RC","NRC","Tc"],"Valeur":[Smax,RCP,RC,NRC,Tc]})
     st.download_button("📥 Télécharger Excel", data=to_excel(df_ex, df_st), file_name="Magneto_IA.xlsx")
+    # ====== CALCUL DE L'EXPOSANT CRITIQUE n ======
+    # On compare ΔS_max à 2T (connu) et à H_pred (prédiction IA)
+    # n = ln(ΔS1/ΔS2) / ln(H1/H2)
+    
+    # 1. Calcul de ΔS_max pour un champ connu (ex: 2 Tesla)
+    dM_dT_2T = dM_dT_stack[1] # On prend la colonne correspondant à 2T
+    deltaS_2T = np.trapezoid(dM_dT_stack[:2], x=H_known[:2], axis=0)
+    Smax_2T = np.max(np.abs(deltaS_2T))
+    
+    # 2. Calcul de n
+    if H_pred != 2.0 and Smax_2T > 0:
+        n_exponent = np.log(Smax / Smax_2T) / np.log(H_pred / 2.0)
+    else:
+        n_exponent = 0.0
+
+    # ====== MISE À JOUR DES MÉTRIQUES (Ajout de n) ======
+    m1, m2, m3, m4, m5, m6 = st.columns(6) # On passe à 6 colonnes
+    m1.metric("ΔS Max", f"{Smax:.3f}")
+    m2.metric("RCP", f"{RCP:.2f}")
+    m3.metric("RC", f"{RC:.2f}")
+    m4.metric("NRC", f"{NRC:.2f}")
+    m5.metric("Tc (K)", f"{Tc:.1f}")
+    m6.metric("Exp. n", f"{n_exponent:.3f}")
+
 
 
 

@@ -94,32 +94,31 @@ if file:
     fig_master, ax_master = plt.subplots(figsize=(6,4))
 
     for H in H_list_full:
-    X_temp = np.column_stack([T,np.full_like(T,H)])
-    X_temp_scaled = scaler_X.transform(X_temp)
-    M_temp = scaler_y.inverse_transform(model.predict(X_temp_scaled).reshape(-1,1)).ravel()
+        X_temp = np.column_stack([T,np.full_like(T,H)])
+        X_temp_scaled = scaler_X.transform(X_temp)
+        M_temp = scaler_y.inverse_transform(model.predict(X_temp_scaled).reshape(-1,1)).ravel()
 
-        if H in [1,2,3]:
-        idx = int(H)-1  # H=1->0, H=2->1, H=3->2
-        dM_dT = np.gradient(M_matrix[:,idx], T)
-        else:
-        dM_dT = np.gradient(M_temp, T)
+            if H in [1,2,3]:
+            idx = int(H)-1  # H=1->0, H=2->1, H=3->2
+            dM_dT = np.gradient(M_matrix[:,idx], T)
+            else:
+            dM_dT = np.gradient(M_temp, T)
 
-    DeltaS_temp = np.trapezoid([dM_dT], x=[H], axis=0)
-    DeltaS_norm = DeltaS_temp / np.max(np.abs(deltaS))
+        DeltaS_temp = np.trapezoid([dM_dT], x=[H], axis=0)
+        DeltaS_norm = DeltaS_temp / np.max(np.abs(deltaS))
 
-    indices_half = np.where(np.abs(deltaS)>=Smax/2)[0]
-    T_r1, T_r2 = T[indices_half[0]], T[indices_half[-1]]
-    theta = np.zeros_like(T)
+        indices_half = np.where(np.abs(deltaS)>=Smax/2)[0]
+        T_r1, T_r2 = T[indices_half[0]], T[indices_half[-1]]
+        theta = np.zeros_like(T)
     for i in range(len(T)):
         theta[i] = -(Tc-T[i])/(Tc-T_r1+1e-6) if T[i]<Tc else (T[i]-Tc)/(T_r2-Tc+1e-6)
 
     ax_master.plot(theta, DeltaS_norm, label=f"H={H}T")
-
-ax_master.set_xlabel("θ (Température réduite)")
-ax_master.set_ylabel("ΔS / ΔSmax")
-ax_master.set_title("Master Curve Multi-H")
-ax_master.legend()
-st.pyplot(fig_master)
+    ax_master.set_xlabel("θ (Température réduite)")
+    ax_master.set_ylabel("ΔS / ΔSmax")
+    ax_master.set_title("Master Curve Multi-H")
+    ax_master.legend()
+    st.pyplot(fig_master)
 
 
     # ================= DISPLAY METRICS =================
@@ -194,4 +193,5 @@ st.pyplot(fig_master)
 
 else:
     st.info("Veuillez charger un fichier CSV.")
+
 

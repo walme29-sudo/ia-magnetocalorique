@@ -145,7 +145,11 @@ if file:
     col5.metric("Tc (K)", f"{Tc:.1f}")
 
     # ================= GRAPHIQUES =================
-    tab1, tab2 = st.tabs(["📈 Magnetisation", "❄ ΔS Curves"])
+    tab1, tab2, tab3 = st.tabs(
+    ["📈 Magnetisation", 
+     "❄ ΔS Curves", 
+     "🧲 Arrott & Master Curve"]
+    )
 
     with tab1:
         df_m = pd.DataFrame({
@@ -159,6 +163,66 @@ if file:
     with tab2:
         df_ds = pd.DataFrame({"ΔS (1→5T)": deltaS}, index=T)
         st.line_chart(df_ds, height=350)
+
+    with tab3:
+
+    st.subheader("Arrott Plot (H/M vs M²)")
+
+    fig_arrott, ax_arrott = plt.subplots(figsize=(7,5))
+
+    for i, H in enumerate([1,2,3]):
+        M = M_matrix[:, i]
+        ax_arrott.plot(M**2, H/M, label=f"{H} T")
+
+    ax_arrott.set_xlabel("M²")
+    ax_arrott.set_ylabel("H/M")
+    ax_arrott.legend()
+
+    st.pyplot(fig_arrott)
+
+    # ================= MASTER CURVE =================
+
+    st.subheader("Master Curve Universelle")
+
+    deltaS_norm = deltaS / np.max(np.abs(deltaS))
+
+    # Réduction température
+    T_r1 = T[np.where(deltaS >= Smax/2)[0][0]]
+    T_r2 = T[np.where(deltaS >= Smax/2)[0][-1]]
+
+    theta = np.zeros_like(T)
+
+    for i in range(len(T)):
+        if T[i] < Tc:
+            theta[i] = -(Tc - T[i]) / (Tc - T_r1)
+        else:
+            theta[i] = (T[i] - Tc) / (T_r2 - Tc)
+
+    fig_master, ax_master = plt.subplots(figsize=(7,5))
+    ax_master.plot(theta, deltaS_norm)
+    ax_master.set_xlabel("θ (Température réduite)")
+    ax_master.set_ylabel("ΔS / ΔSmax")
+
+    st.pyplot(fig_master)
+
+    # ================= EXPORT PDF =================
+
+    col_pdf1, col_pdf2 = st.columns(2)
+
+    col_pdf1.download_button(
+        "📥 Télécharger Arrott PDF",
+        data=plot_to_pdf(fig_arrott),
+        file_name="Arrott_Plot.pdf",
+        mime="application/pdf"
+    )
+
+    col_pdf2.download_button(
+        "📥 Télécharger Master Curve PDF",
+        data=plot_to_pdf(fig_master),
+        file_name="Master_Curve.pdf",
+        mime="application/pdf"
+    )
+
 
     # ================= EXPORT =================
     st.subheader("Téléchargement")
@@ -201,3 +265,4 @@ if file:
 
 else:
     st.info("Veuillez charger un fichier CSV.")
+

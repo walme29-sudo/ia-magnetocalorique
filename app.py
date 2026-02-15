@@ -130,22 +130,64 @@ if file:
             ax_n.set_title("Exposant n(T)"); st.pyplot(fig_n)
 
     with tab3:
-        col_t3_1, col_t3_2 = st.columns(2)
+    st.subheader("Analyse de Transition & Modélisation Linéaire")
+    col_t3_1, col_t3_2 = st.columns(2)
+
         with col_t3_1:
-            st.markdown("**Banerjee Criterion (Arrott Plot)**")
+            st.markdown("**Arrott Plot & Fit Linéaire ($y = ax + b$)**")
             fig_arr, ax_arr = plt.subplots(figsize=(5, 4))
-            ax_arr.plot(M_user**2, H_user/(M_user + 1e-9))
-            ax_arr.set_xlabel("$M^2$"); ax_arr.set_ylabel("$H/M$"); st.pyplot(fig_arr)
-            pente = np.polyfit(M_user**2, H_user/(M_user+1e-9), 1)[0]
-            st.write("Ordre suggéré :", "**2ème**" if pente > 0 else "**1er**")
+            
+            # Préparation des données pour le fit (M² vs H/M)
+            # On utilise les données prédites à H_user
+            X_fit = (M_user**2).reshape(-1, 1)
+            Y_fit = (H_user / (M_user + 1e-9)).reshape(-1, 1)
+            
+            # Calcul de la droite de régression f(x) = ax + b
+            from sklearn.linear_model import LinearRegression
+            reg_lin = LinearRegression().fit(X_fit, Y_fit)
+            Y_pred = reg_lin.predict(X_fit)
+            
+            a_coef = reg_lin.coef_[0][0]
+            b_inter = reg_lin.intercept_[0]
+            
+            # Affichage
+            ax_arr.scatter(X_fit, Y_fit, color='blue', s=10, alpha=0.3, label="Points IA")
+            ax_arr.plot(X_fit, Y_pred, color='red', lw=2, label="Ligne de tendance")
+            
+            ax_arr.set_xlabel("$M^2$")
+            ax_arr.set_ylabel("$H/M$")
+            ax_arr.legend()
+            st.pyplot(fig_arr)
+            
+            # Affichage de l'équation
+            st.success(f"Équation : **y = {a_coef:.4e}x + {b_inter:.4f}**")
+            st.info(f"R² (Précision du fit) : {reg_lin.score(X_fit, Y_fit):.4f}")
+
         with col_t3_2:
-            st.markdown("**Master Curve (Scaling)**")
-            if len(idx_half) > 1:
-                t_r1, t_r2 = T[idx_half[0]], T[idx_half[-1]]
+            st.markdown("**Master Curve (Scaling Universel)**")
+            # Utilisation des indices de largeur à mi-hauteur calculés plus haut
+            if len(indices) > 1:
+                t_r1, t_r2 = T[indices[0]], T[indices[-1]]
+                
+                # Calcul de la variable réduite theta
+                theta = np.where(T <= Tc, 
+                                 -(T - Tc) / (t_r1 - Tc + 1e-6), 
+                                 (T - Tc) / (t_r2 - Tc + 1e-6))
+                
                 fig_mst, ax_mst = plt.subplots(figsize=(5, 4))
-                theta = np.where(T <= Tc, -(T-Tc)/(t_r1-Tc+1e-6), (T-Tc)/(t_r2-Tc+1e-6))
-                ax_mst.plot(theta, np.abs(deltaS)/Smax, label=f"{H_user}T")
-                ax_mst.set_xlabel("$\\theta$"); ax_mst.set_ylabel("$\\Delta S / \\Delta S_{max}$"); st.pyplot(fig_mst)
+                ax_mst.plot(theta, np.abs(deltaS)/Smax, color='green', lw=2)
+                ax_mst.set_xlabel(r"$\theta$ (Variable réduite)")
+                ax_mst.set_ylabel(r"$\Delta S / \Delta S_{max}$")
+                ax_mst.grid(True, alpha=0.3)
+                st.pyplot(fig_mst)
+            else:
+                st.warning("Écart de température insuffisant pour la Master Curve.")
+
+        # Bouton d'export pour ce graphique spécifique
+        st.download_button("📥 Télécharger Arrott Plot (PDF)", 
+                           data=plot_to_pdf(fig_arr), 
+                           file_name="Arrott_Linear_Fit.pdf")
+
 
     with tab4:
         st.subheader("🧬 Comparaison Surfaces 3D")
@@ -166,3 +208,4 @@ if file:
     st.download_button("📥 Export Excel", data=to_excel_full(df_export, df_stats), file_name="Magnetocaloric_Expert.xlsx")
 else:
     st.info("Veuillez charger un fichier CSV pour démarrer.")
+

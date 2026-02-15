@@ -249,6 +249,43 @@ if file:
     st.download_button("📥 Full Excel File",
                        data=to_excel_full(df_export,df_stats),
                        file_name="Magnetocaloric_Final.xlsx")
+    from mpl_toolkits.mplot3d import Axes3D
+
+    with tab4:
+    st.subheader("🧬 Surface 3D M(T,H)")
+
+    # grid champs
+    H_surface = np.linspace(1, H_user, 30)
+    T_surface = T
+
+    T_grid, H_grid = np.meshgrid(T_surface, H_surface)
+
+    X_surface = np.column_stack([
+        T_grid.ravel(),
+        H_grid.ravel()
+    ])
+
+    X_surface_scaled = scaler_X.transform(X_surface)
+
+    M_surface = scaler_y.inverse_transform(
+        model.predict(X_surface_scaled).reshape(-1,1)
+    ).ravel()
+
+    M_surface = M_surface.reshape(len(H_surface), len(T_surface))
+
+    fig = plt.figure(figsize=(6,4))
+    ax = fig.add_subplot(111, projection='3d')
+
+    ax.plot_surface(T_grid, H_grid, M_surface)
+
+    ax.set_xlabel("T (K)")
+    ax.set_ylabel("H (T)")
+    ax.set_zlabel("M")
+
+    plt.tight_layout()
+    st.pyplot(fig)
+
 
 else:
     st.info("Upload your CSV file.")
+

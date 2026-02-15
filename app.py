@@ -4,13 +4,14 @@ import numpy as np
 import matplotlib.pyplot as plt
 import plotly.graph_objects as go
 from sklearn.neural_network import MLPRegressor
+from sklearn.linear_model import LinearRegression
 from sklearn.preprocessing import StandardScaler
 from io import BytesIO
 
 # ================= CONFIGURATION PAGE =================
-st.set_page_config(page_title="IA Magnétocalorique Pro", layout="wide")
+st.set_page_config(page_title="IA Magnétocalorique Expert", layout="wide")
 
-# ================= FONCTIONS TECHNIQUES =================
+# ================= FONCTIONS D'EXPORT =================
 def to_excel_full(df_main, df_stats):
     output = BytesIO()
     with pd.ExcelWriter(output, engine='openpyxl') as writer:
@@ -25,12 +26,12 @@ def plot_to_pdf(fig):
 
 # ================= BARRE LATÉRALE (SIDEBAR) =================
 with st.sidebar:
-    st.header("⚙️ Configuration IA")
+    st.header("⚙️ Configuration IA & Physique")
     nodes_m1 = st.slider("Neurones Modèle A (Principal)", 32, 256, 128, step=32)
     nodes_m2 = st.slider("Neurones Modèle B (Comparaison)", 32, 256, 64, step=32)
     st.divider()
-    st.subheader("Paramètres Physiques")
     deltaT_tec = st.slider("Plage TEC (ΔT en K)", 1, 10, 3)
+    st.info("Le Modèle A pilote les calculs thermodynamiques.")
 
 # ================= ENTÊTE =================
 col1, col2 = st.columns([1,5])
@@ -40,8 +41,8 @@ with col1:
     except:
         st.markdown("### ISSAT")
 with col2:
-    st.markdown("## 🧲 IA Magnétocalorique - Analyse Globale & Expert")
-    st.markdown("**Élaboré par : DALHOUMI WALID**")
+    st.markdown("## 🧲 IA Magnétocalorique - Analyse Expert")
+    st.markdown("**DALHOUMI WALID**")
 
 st.divider()
 
@@ -54,10 +55,10 @@ if file:
     M_matrix = data[["M_1T","M_2T","M_3T"]].values
 
     # ================= ENTRAÎNEMENT MODÈLE A =================
-    with st.spinner('Entraînement de l\'IA en cours...'):
-        H_values = np.array([1, 2, 3])
-        T_grid_in, H_grid_in = np.meshgrid(T, H_values)
-        X = np.column_stack([T_grid_in.ravel(), H_grid_in.ravel()])
+    with st.spinner('IA en cours d\'apprentissage...'):
+        H_known = np.array([1, 2, 3])
+        Tg, Hg = np.meshgrid(T, H_known)
+        X = np.column_stack([Tg.ravel(), Hg.ravel()])
         y = M_matrix.T.ravel()
 
         scaler_X, scaler_y = StandardScaler(), StandardScaler()
@@ -67,146 +68,104 @@ if file:
         model = MLPRegressor(hidden_layer_sizes=(nodes_m1, nodes_m1), max_iter=5000, random_state=42)
         model.fit(X_scaled, y_scaled)
 
-    # ================= PRÉDICTION UTILISATEUR =================
+    # ================= PRÉDICTION & CALCULS =================
     st.subheader("🔮 Prédiction à Champ Personnalisé")
-    H_user = st.number_input("Champ magnétique cible (Tesla)", 0.1, 10.0, 5.0, 0.5)
+    H_user = st.number_input("Champ cible (Tesla)", 0.1, 10.0, 5.0, 0.5)
 
-    X_user = scaler_X.transform(np.column_stack([T, np.full_like(T, H_user)]))
-    M_user = scaler_y.inverse_transform(model.predict(X_user).reshape(-1,1)).ravel()
+    X_u = scaler_X.transform(np.column_stack([T, np.full_like(T, H_user)]))
+    M_u = scaler_y.inverse_transform(model.predict(X_u).reshape(-1,1)).ravel()
 
-    # ================= CALCULS THERMODYNAMIQUES =================
-    # Delta S
-    dM_dT = [np.gradient(m, T) for m in [M_matrix[:,0], M_matrix[:,1], M_matrix[:,2], M_user]]
+    # --- Thermodynamique ---
+    dM_dT = [np.gradient(m, T) for m in [M_matrix[:,0], M_matrix[:,1], M_matrix[:,2], M_u]]
     deltaS = np.trapezoid(dM_dT, x=[1, 2, 3, H_user], axis=0)
     Smax = np.max(np.abs(deltaS))
     Tc = T[np.argmax(np.abs(deltaS))]
 
-    # RCP & RC
-    idx_half = np.where(np.abs(deltaS) >= Smax/2)[0]
-    FWHM = (T[idx_half[-1]] - T[idx_half[0]]) if len(idx_half) > 1 else 0
-    RCP = Smax * FWHM
+    # --- Paramètres Experts ---
+    # Recherche des indices pour FWHM (Crucial pour Master Curve)
+    indices = np.where(np.abs(deltaS) >= Smax/2)[0]
+    RCP = Smax * (T[indices[-1]] - T[indices[0]]) if len(indices) > 1 else 0
     RC = np.trapezoid(np.abs(deltaS), T)
-
-    # TEC & NRC
+    NRC = RCP / H_user if H_user != 0 else 0
+    
+    # TEC
     TEC = [np.mean(np.abs(deltaS)[(T >= t - deltaT_tec/2) & (T <= t + deltaT_tec/2)]) for t in T]
     TEC_max = np.max(TEC)
-    NRC = RCP / H_user if H_user != 0 else 0
-
-    # n(T)
-    H_list = [1, 2, 3, H_user]
-    n_T = []
-    for i in range(len(T)):
-        y_vals = np.array([np.abs(d[i]) for d in dM_dT])
-        n_T.append(np.polyfit(np.log(H_list), np.log(y_vals + 1e-9), 1)[0])
-    n_exponent = n_T[np.argmin(np.abs(T-Tc))]
 
     # ================= AFFICHAGE MÉTRIQUES =================
     m1, m2, m3, m4, m5 = st.columns(5)
     m1.metric("ΔS Max", f"{Smax:.4f}")
     m2.metric("RCP", f"{RCP:.2f}")
     m3.metric(f"TEC ({deltaT_tec}K)", f"{TEC_max:.4f}")
-    m4.metric("n (at Tc)", f"{n_exponent:.3f}")
+    m4.metric("NRC", f"{NRC:.2f}")
     m5.metric("Tc (K)", f"{Tc:.1f}")
 
     # ================= ONGLETS (TABS) =================
-    tab1, tab2, tab3, tab4 = st.tabs(["📈 Aimantation", "❄️ Thermodynamique", "🧲 Arrott & Master", "🧬 Comparaison 3D"])
+    tab1, tab2, tab3, tab4 = st.tabs(["📈 Aimantation", "❄️ Entropie & TEC", "🧲 Arrott Fit", "🧬 Comparaison 3D"])
 
     with tab1:
-        df_m = pd.DataFrame({"1T": M_matrix[:,0], "3T": M_matrix[:,2], f"{H_user}T (IA)": M_user}, index=T)
+        df_m = pd.DataFrame({"1T": M_matrix[:,0], "3T": M_matrix[:,2], f"{H_user}T (IA)": M_u}, index=T)
         st.line_chart(df_m)
 
     with tab2:
-        c_a, c_b = st.columns(2)
-        with c_a:
-            fig_ds, ax_ds = plt.subplots(figsize=(5,3.5))
-            ax_ds.plot(T, np.abs(deltaS), label="|ΔS|", color='blue')
-            ax_ds.plot(T, TEC, label=f"TEC({deltaT_tec}K)", color='orange', ls='--')
-            ax_ds.set_title("Entropie & TEC")
-            ax_ds.legend(); st.pyplot(fig_ds)
-        with c_b:
-            fig_n, ax_n = plt.subplots(figsize=(5,3.5))
-            ax_n.plot(T, n_T, color='green')
-            ax_n.axvline(Tc, color='red', ls='--')
-            ax_n.set_title("Exposant n(T)"); st.pyplot(fig_n)
+        fig_th, ax_th = plt.subplots(figsize=(6, 3.5))
+        ax_th.plot(T, np.abs(deltaS), label="|ΔS|", color='blue', lw=2)
+        ax_th.plot(T, TEC, label=f"TEC({deltaT_tec}K)", color='orange', ls='--')
+        ax_th.set_title("Entropie vs Température"); ax_th.legend(); st.pyplot(fig_th)
 
     with tab3:
-        st.subheader("Analyse de Transition & Modélisation Linéaire")
-        col_t3_1, col_t3_2 = st.columns(2)
+        st.subheader("Analyse de Transition & Fit Linéaire $y=ax+b$")
+        c1, c2 = st.columns(2)
+        with c1:
+            st.markdown("**Arrott Plot (Banerjee Criterion)**")
+            fig_ar, ax_ar = plt.subplots(figsize=(5, 4))
+            mask = (M_u > 1e-6)
+            X_f, Y_f = (M_u[mask]**2).reshape(-1, 1), (H_user / M_u[mask]).reshape(-1, 1)
+            
+            # Régression Linéaire f(x) = ax + b
+            reg = LinearRegression().fit(X_f, Y_f)
+            ax_ar.scatter(X_f, Y_f, alpha=0.3, s=10, label="Données")
+            ax_ar.plot(X_f, reg.predict(X_f), color='red', label="Fit Linéaire")
+            ax_ar.set_xlabel("$M^2$"); ax_ar.set_ylabel("$H/M$"); ax_ar.legend()
+            st.pyplot(fig_ar)
+            
+            pente = float(reg.coef_)
+            ordre = "2ème" if pente > 0 else "1er"
+            st.success(f"Équation : **y = {pente:.4e}x + {float(reg.intercept_):.4f}**")
+            st.info(f"Transition de **{ordre} ordre** suggérée.")
 
-        with col_t3_1:
-            st.markdown("**Arrott Plot & Fit Linéaire ($y = ax + b$)**")
-            fig_arr, ax_arr = plt.subplots(figsize=(5, 4))
-            
-            # Préparation des données pour le fit (M² vs H/M)
-            # On utilise les données prédites à H_user
-            X_fit = (M_user**2).reshape(-1, 1)
-            Y_fit = (H_user / (M_user + 1e-9)).reshape(-1, 1)
-            
-            # Calcul de la droite de régression f(x) = ax + b
-            from sklearn.linear_model import LinearRegression
-            reg_lin = LinearRegression().fit(X_fit, Y_fit)
-            Y_pred = reg_lin.predict(X_fit)
-            
-            a_coef = reg_lin.coef_[0][0]
-            b_inter = reg_lin.intercept_[0]
-            
-            # Affichage
-            ax_arr.scatter(X_fit, Y_fit, color='blue', s=10, alpha=0.3, label="Points IA")
-            ax_arr.plot(X_fit, Y_pred, color='red', lw=2, label="Ligne de tendance")
-            
-            ax_arr.set_xlabel("$M^2$")
-            ax_arr.set_ylabel("$H/M$")
-            ax_arr.legend()
-            st.pyplot(fig_arr)
-            
-            # Affichage de l'équation
-            st.success(f"Équation : **y = {a_coef:.4e}x + {b_inter:.4f}**")
-            st.info(f"R² (Précision du fit) : {reg_lin.score(X_fit, Y_fit):.4f}")
-
-        with col_t3_2:
+        with c2:
             st.markdown("**Master Curve (Scaling Universel)**")
-            # Utilisation des indices de largeur à mi-hauteur calculés plus haut
             if len(indices) > 1:
                 t_r1, t_r2 = T[indices[0]], T[indices[-1]]
-                
-                # Calcul de la variable réduite theta
-                theta = np.where(T <= Tc, 
-                                 -(T - Tc) / (t_r1 - Tc + 1e-6), 
-                                 (T - Tc) / (t_r2 - Tc + 1e-6))
-                
-                fig_mst, ax_mst = plt.subplots(figsize=(5, 4))
-                ax_mst.plot(theta, np.abs(deltaS)/Smax, color='green', lw=2)
-                ax_mst.set_xlabel(r"$\theta$ (Variable réduite)")
-                ax_mst.set_ylabel(r"$\Delta S / \Delta S_{max}$")
-                ax_mst.grid(True, alpha=0.3)
-                st.pyplot(fig_mst)
+                theta = np.where(T <= Tc, -(T-Tc)/(t_r1-Tc+1e-6), (T-Tc)/(t_r2-Tc+1e-6))
+                fig_ms, ax_ms = plt.subplots(figsize=(5, 4))
+                ax_ms.plot(theta, np.abs(deltaS)/Smax, color='green', lw=2)
+                ax_ms.set_xlabel(r"$\theta$"); ax_ms.set_ylabel(r"$\Delta S / \Delta S_{max}$"); st.pyplot(fig_ms)
             else:
-                st.warning("Écart de température insuffisant pour la Master Curve.")
-
-        # Bouton d'export pour ce graphique spécifique
-        st.download_button("📥 Télécharger Arrott Plot (PDF)", 
-                           data=plot_to_pdf(fig_arr), 
-                           file_name="Arrott_Linear_Fit.pdf")
-
+                st.warning("Données FWHM insuffisantes.")
 
     with tab4:
-        st.subheader("🧬 Comparaison Surfaces 3D")
+        st.subheader("🧬 Comparaison Surfaces 3D (Modèle A vs B)")
         model_B = MLPRegressor(hidden_layer_sizes=(nodes_m2, nodes_m2), max_iter=3000, random_state=1).fit(X_scaled, y_scaled)
         H_sr = np.linspace(0.1, H_user, 30)
         Ts_g, Hs_g = np.meshgrid(T, H_sr)
         X_sf = scaler_X.transform(np.column_stack([Ts_g.ravel(), Hs_g.ravel()]))
         ZA = scaler_y.inverse_transform(model.predict(X_sf).reshape(-1,1)).reshape(len(H_sr), len(T))
         ZB = scaler_y.inverse_transform(model_B.predict(X_sf).reshape(-1,1)).reshape(len(H_sr), len(T))
-        fig3d = go.Figure(data=[go.Surface(z=ZA, x=T, y=H_sr, colorscale='Viridis', name='Modèle A'),
-                                go.Surface(z=ZB, x=T, y=H_sr, colorscale='Reds', opacity=0.4, name='Modèle B', showscale=False)])
+        
+        fig3d = go.Figure(data=[
+            go.Surface(z=ZA, x=T, y=H_sr, colorscale='Viridis', name='Modèle A'),
+            go.Surface(z=ZB, x=T, y=H_sr, colorscale='Reds', opacity=0.4, name='Modèle B', showscale=False)
+        ])
+        fig3d.update_layout(scene=dict(xaxis_title='T (K)', yaxis_title='H (T)', zaxis_title='M'), height=650)
         st.plotly_chart(fig3d, use_container_width=True)
 
     # ================= EXPORTS =================
     st.divider()
-    df_export = pd.DataFrame({"T":T, "M_pred":M_user, "DeltaS":deltaS, "n_T":n_T})
-    df_stats = pd.DataFrame({"Paramètre":["Smax", "RCP", "TEC_max", "NRC", "Tc"], "Valeur":[Smax, RCP, TEC_max, NRC, Tc]})
-    st.download_button("📥 Export Excel", data=to_excel_full(df_export, df_stats), file_name="Magnetocaloric_Expert.xlsx")
+    df_ex = pd.DataFrame({"T":T, "M_pred":M_u, "DeltaS":deltaS})
+    df_st = pd.DataFrame({"Metric":["Smax", "RCP", "TEC_max", "NRC", "Tc"], "Val":[Smax, RCP, TEC_max, NRC, Tc]})
+    st.download_button("📥 Télécharger Résultats (Excel)", data=to_excel_full(df_ex, df_st), file_name="Analyse_IA_Final.xlsx")
+
 else:
-    st.info("Veuillez charger un fichier CSV pour démarrer.")
-
-
+    st.info("Veuillez charger un fichier CSV pour démarrer l'analyse.")

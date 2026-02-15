@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
+import plotly.graph_objects as go
 from sklearn.neural_network import MLPRegressor
 from sklearn.preprocessing import StandardScaler
 from io import BytesIO
@@ -41,7 +42,6 @@ st.divider()
 file = st.file_uploader("Upload CSV (T, M_1T, M_2T, M_3T)", type=["csv"])
 
 if file:
-
     data = pd.read_csv(file).dropna()
     required = ["T","M_1T","M_2T","M_3T"]
 
@@ -54,9 +54,9 @@ if file:
 
     # ================= GLOBAL NN =================
     H_values = np.array([1,2,3])
-    T_grid, H_grid = np.meshgrid(T, H_values)
+    T_grid_init, H_grid_init = np.meshgrid(T, H_values)
 
-    X = np.column_stack([T_grid.ravel(), H_grid.ravel()])
+    X = np.column_stack([T_grid_init.ravel(), H_grid_init.ravel()])
     y = M_matrix.T.ravel()
 
     scaler_X = StandardScaler()
@@ -120,7 +120,6 @@ if file:
             dM_dT = np.gradient(M_matrix[:,idx],T)
         else:
             dM_dT = np.gradient(M_user,T)
-
         DeltaS_matrix.append(np.abs(dM_dT))
 
     DeltaS_matrix = np.array(DeltaS_matrix)
@@ -151,7 +150,7 @@ if file:
     c5.metric("Tc (K)", f"{Tc:.1f}")
 
     # ================= TABS =================
-    tab1, tab2, tab3 = st.tabs(["📈 Magnetisation","❄ ΔS & n(T)","🧲 Arrott & Master"])
+    tab1, tab2, tab3, tab4 = st.tabs(["📈 Magnetisation","❄ ΔS & n(T)","🧲 Arrott & Master", "🧬 Surface 3D"])
 
     with tab1:
         df_m = pd.DataFrame({
@@ -160,7 +159,6 @@ if file:
             "3T":M_matrix[:,2],
             f"{H_user:.1f}T (NN)":M_user
         }, index=T)
-
         st.line_chart(df_m)
 
     with tab2:
@@ -168,127 +166,69 @@ if file:
         ax_ds.plot(T,deltaS)
         ax_ds.set_xlabel("T (K)")
         ax_ds.set_ylabel("ΔS")
-        plt.tight_layout()
         st.pyplot(fig_ds)
 
         fig_n, ax_n = plt.subplots(figsize=(5,3))
         ax_n.plot(T,n_T)
-        ax_n.axvline(Tc, linestyle='--')
+        ax_n.axvline(Tc, color='red', linestyle='--')
         ax_n.set_xlabel("T (K)")
         ax_n.set_ylabel("n(T)")
-        plt.tight_layout()
         st.pyplot(fig_n)
 
     with tab3:
-
-        # -------- Arrott Plot --------
         st.subheader("Arrott Plot (H/M vs M²)")
         fig_arrott, ax_arrott = plt.subplots(figsize=(5,3))
-
         H_plot = [1,2,3,H_user]
         M_all = [M_matrix[:,0],M_matrix[:,1],M_matrix[:,2],M_user]
-
         for H, M in zip(H_plot, M_all):
             valid = M != 0
-            ax_arrott.plot(M[valid]**2,
-                           H/M[valid],
-                           label=f"{H:.1f}T")
-
+            ax_arrott.plot(M[valid]**2, H/M[valid], label=f"{H:.1f}T")
         ax_arrott.legend()
-        plt.tight_layout()
         st.pyplot(fig_arrott)
 
-        # -------- Master Curve --------
         st.subheader("Master Curve Multi-H")
         fig_master, ax_master = plt.subplots(figsize=(5,3))
-
         for H, M in zip(H_plot, M_all):
-
             dM_dT = np.gradient(M,T)
             DeltaS_temp = np.abs(dM_dT)
-            DeltaS_norm = DeltaS_temp/Smax
-
-            indices_half = np.where(np.abs(deltaS)>=Smax/2)[0]
-            T_r1,T_r2 = T[indices_half[0]],T[indices_half[-1]]
-
-            theta = np.zeros_like(T)
-            for i in range(len(T)):
-                theta[i] = -(Tc-T[i])/(Tc-T_r1+1e-6) if T[i]<Tc else (T[i]-Tc)/(T_r2-Tc+1e-6)
-
-            ax_master.plot(theta,DeltaS_norm,label=f"{H:.1f}T")
-
+            DeltaS_norm = DeltaS_temp/np.max(DeltaS_temp)
+            indices_half = np.where(DeltaS_norm>=0.5)[0]
+            if len(indices_half) > 1:
+                T_r1, T_r2 = T[indices_half[0]], T[indices_half[-1]]
+                theta = np.where(T < Tc, -(T-Tc)/(T_r1-Tc), (T-Tc)/(T_r2-Tc))
+                ax_master.plot(theta, DeltaS_norm, label=f"{H:.1f}T")
         ax_master.legend()
-        plt.tight_layout()
         st.pyplot(fig_master)
 
-        st.download_button("📥 Arrott PDF",
-                           data=plot_to_pdf(fig_arrott),
-                           file_name="Arrott.pdf")
+    with tab4:
+        st.subheader("🧬 Surface 3D M(T,H) Interactive")
+        
+        # Génération de la surface
+        H_surface = np.linspace(0.1, H_user, 30)
+        T_surface = T
+        T_grid, H_grid = np.meshgrid(T_surface, H_surface)
+        
+        X_surf = np.column_stack([T_grid.ravel(), H_grid.ravel()])
+        X_surf_scaled = scaler_X.transform(X_surf)
+        M_surf = scaler_y.inverse_transform(model.predict(X_surf_scaled).reshape(-1,1)).reshape(len(H_surface), len(T_surface))
 
-        st.download_button("📥 Master Curve PDF",
-                           data=plot_to_pdf(fig_master),
-                           file_name="MasterCurve.pdf")
+        # Graphique Plotly
+        fig_3d = go.Figure(data=[go.Surface(z=M_surf, x=T_surface, y=H_surface, colorscale='Viridis')])
+        fig_3d.update_layout(
+            scene=dict(xaxis_title='T (K)', yaxis_title='H (T)', zaxis_title='M'),
+            width=800, height=600, margin=dict(l=0, r=0, b=0, t=40)
+        )
+        st.plotly_chart(fig_3d, use_container_width=True)
 
     # ================= EXPORT EXCEL =================
+    st.subheader("Download Results")
     df_export = pd.DataFrame({
-        "T":T,
-        "M_1T":M_matrix[:,0],
-        "M_2T":M_matrix[:,1],
-        "M_3T":M_matrix[:,2],
-        f"M_{H_user:.1f}T_NN":M_user,
-        "DeltaS":deltaS,
-        "n(T)":n_T
+        "T":T, "M_1T":M_matrix[:,0], "M_2T":M_matrix[:,1], "M_3T":M_matrix[:,2],
+        f"M_{H_user:.1f}T_NN":M_user, "DeltaS":deltaS, "n(T)":n_T
     })
-
     df_stats = pd.DataFrame({
         "Parameter":["DeltaS Max","RCP","RC","n(Tc)","Tc"],
         "Value":[Smax,RCP,RC,n_exponent,Tc]
     })
-
-    st.subheader("Download Excel")
-    st.download_button("📥 Full Excel File",
-                       data=to_excel_full(df_export,df_stats),
-                       file_name="Magnetocaloric_Final.xlsx")
-    from mpl_toolkits.mplot3d import Axes3D
-
-    with tab4:
-        st.subheader("🧬 Surface 3D M(T,H)")
-
-        # grid champs
-        H_surface = np.linspace(1, H_user, 30)
-        T_surface = T
-
-        T_grid, H_grid = np.meshgrid(T_surface, H_surface)
-
-        X_surface = np.column_stack([
-        T_grid.ravel(),
-        H_grid.ravel()
-        ])
-
-        X_surface_scaled = scaler_X.transform(X_surface)
-
-        M_surface = scaler_y.inverse_transform(
-        model.predict(X_surface_scaled).reshape(-1,1)
-        ).ravel()
-
-        M_surface = M_surface.reshape(len(H_surface), len(T_surface))
-
-    fig = plt.figure(figsize=(6,4))
-    ax = fig.add_subplot(111, projection='3d')
-
-    ax.plot_surface(T_grid, H_grid, M_surface)
-
-    ax.set_xlabel("T (K)")
-    ax.set_ylabel("H (T)")
-    ax.set_zlabel("M")
-
-    plt.tight_layout()
-    st.pyplot(fig)
-
-
-    else:
-        st.info("Upload your CSV file.")
-
-
-
+    st.download_button("📥 Full Excel File", data=to_excel_full(df_export,df_stats), file_name="Magnetocaloric_Final.xlsx")
 

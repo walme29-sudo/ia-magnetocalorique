@@ -7,7 +7,7 @@ from sklearn.preprocessing import StandardScaler
 from io import BytesIO
 
 # ================= CONFIG =================
-st.markdown("🧲 **IA Magnétocalorique - Neural Network Global**")
+st.set_page_config(page_title="IA Magnétocalorique", layout="wide")
 
 # ================= EXPORT FUNCTIONS =================
 def to_excel_full(df_main, df_stats):
@@ -27,7 +27,7 @@ col1, col2 = st.columns([1,5])
 
 with col1:
     try:
-        st.image("logo.png", width=120)
+        st.image("logo.png", width=110)
     except:
         st.write("ISSAT")
 
@@ -37,7 +37,7 @@ with col2:
 
 st.divider()
 
-# ================= FILE =================
+# ================= FILE UPLOAD =================
 file = st.file_uploader("Upload CSV (T, M_1T, M_2T, M_3T)", type=["csv"])
 
 if file:
@@ -55,6 +55,7 @@ if file:
     # ================= GLOBAL NN =================
     H_values = np.array([1,2,3])
     T_grid, H_grid = np.meshgrid(T, H_values)
+
     X = np.column_stack([T_grid.ravel(), H_grid.ravel()])
     y = M_matrix.T.ravel()
 
@@ -72,20 +73,35 @@ if file:
 
     model.fit(X_scaled, y_scaled)
 
-    # ================= PREDICT 5T =================
-    X_5T = np.column_stack([T, np.full_like(T,5)])
-    X_5T_scaled = scaler_X.transform(X_5T)
-    M_5T = scaler_y.inverse_transform(
-        model.predict(X_5T_scaled).reshape(-1,1)
+    # ================= USER CHAMP =================
+    st.subheader("🔮 Champ de prédiction personnalisé")
+
+    H_user = st.number_input(
+        "Choisir le champ magnétique (Tesla)",
+        min_value=0.1,
+        max_value=10.0,
+        value=5.0,
+        step=0.5
+    )
+
+    # ================= PREDICTION =================
+    X_user = np.column_stack([T, np.full_like(T,H_user)])
+    X_user_scaled = scaler_X.transform(X_user)
+
+    M_user = scaler_y.inverse_transform(
+        model.predict(X_user_scaled).reshape(-1,1)
     ).ravel()
 
-    # ================= ΔS CALCULATION =================
+    # ================= ΔS =================
     dM1 = np.gradient(M_matrix[:,0],T)
     dM2 = np.gradient(M_matrix[:,1],T)
     dM3 = np.gradient(M_matrix[:,2],T)
-    dM5 = np.gradient(M_5T,T)
+    dM_user = np.gradient(M_user,T)
 
-    deltaS = np.trapezoid([dM1,dM2,dM3,dM5], x=[1,2,3,5], axis=0)
+    deltaS = np.trapezoid([dM1,dM2,dM3,dM_user],
+                         x=[1,2,3,H_user],
+                         axis=0)
+
     Smax = np.max(np.abs(deltaS))
     Tc = T[np.argmax(np.abs(deltaS))]
 
@@ -94,22 +110,16 @@ if file:
     RCP = Smax*(T[indices[-1]]-T[indices[0]]) if len(indices)>1 else 0
     RC = np.trapezoid(np.abs(deltaS),T)
 
-    # ================= n(T) SCIENTIFIC =================
-    H_list_full = [1,2,3,5]
+    # ================= n(T) =================
+    H_list_full = [1,2,3,H_user]
     DeltaS_matrix = []
 
     for H in H_list_full:
-        X_temp = np.column_stack([T,np.full_like(T,H)])
-        X_temp_scaled = scaler_X.transform(X_temp)
-        M_temp = scaler_y.inverse_transform(
-            model.predict(X_temp_scaled).reshape(-1,1)
-        ).ravel()
-
         if H in [1,2,3]:
             idx = int(H)-1
             dM_dT = np.gradient(M_matrix[:,idx],T)
         else:
-            dM_dT = np.gradient(M_temp,T)
+            dM_dT = np.gradient(M_user,T)
 
         DeltaS_matrix.append(np.abs(dM_dT))
 
@@ -148,44 +158,55 @@ if file:
             "1T":M_matrix[:,0],
             "2T":M_matrix[:,1],
             "3T":M_matrix[:,2],
-            "5T (NN)":M_5T
+            f"{H_user:.1f}T (NN)":M_user
         }, index=T)
+
         st.line_chart(df_m)
 
     with tab2:
-        df_ds = pd.DataFrame({"ΔS (1→5T)":deltaS}, index=T)
-        st.line_chart(df_ds)
-
-        st.subheader("Exposant critique n(T)")
-        fig_n, ax_n = plt.subplots(figsize=(5.5,3.5))
-        ax_n.plot(T,n_T)
+        fig_ds, ax_ds = plt.subplots(figsize=(5,3))
+        ax_ds.plot(T,deltaS)
+        ax_ds.set_xlabel("T (K)")
+        ax_ds.set_ylabel("ΔS")
         plt.tight_layout()
+        st.pyplot(fig_ds)
+
+        fig_n, ax_n = plt.subplots(figsize=(5,3))
+        ax_n.plot(T,n_T)
         ax_n.axvline(Tc, linestyle='--')
         ax_n.set_xlabel("T (K)")
         ax_n.set_ylabel("n(T)")
+        plt.tight_layout()
         st.pyplot(fig_n)
 
     with tab3:
+
+        # -------- Arrott Plot --------
         st.subheader("Arrott Plot (H/M vs M²)")
-        fig_arrott, ax_arrott = plt.subplots(figsize=(5.5,3.5))
-        for i,H in enumerate([1,2,3]):
-            M = M_matrix[:,i]
-            ax_arrott.plot(M**2,H/M,label=f"{H}T")
+        fig_arrott, ax_arrott = plt.subplots(figsize=(5,3))
+
+        H_plot = [1,2,3,H_user]
+        M_all = [M_matrix[:,0],M_matrix[:,1],M_matrix[:,2],M_user]
+
+        for H, M in zip(H_plot, M_all):
+            valid = M != 0
+            ax_arrott.plot(M[valid]**2,
+                           H/M[valid],
+                           label=f"{H:.1f}T")
+
         ax_arrott.legend()
+        plt.tight_layout()
         st.pyplot(fig_arrott)
 
+        # -------- Master Curve --------
         st.subheader("Master Curve Multi-H")
-        fig_master, ax_master = plt.subplots(figsize=(5.5,3.5))
+        fig_master, ax_master = plt.subplots(figsize=(5,3))
 
-        for H in H_list_full:
-            if H in [1,2,3]:
-                idx = int(H)-1
-                dM_dT = np.gradient(M_matrix[:,idx],T)
-            else:
-                dM_dT = np.gradient(M_5T,T)
+        for H, M in zip(H_plot, M_all):
 
+            dM_dT = np.gradient(M,T)
             DeltaS_temp = np.abs(dM_dT)
-            DeltaS_norm = DeltaS_temp/np.max(np.abs(deltaS))
+            DeltaS_norm = DeltaS_temp/Smax
 
             indices_half = np.where(np.abs(deltaS)>=Smax/2)[0]
             T_r1,T_r2 = T[indices_half[0]],T[indices_half[-1]]
@@ -194,9 +215,10 @@ if file:
             for i in range(len(T)):
                 theta[i] = -(Tc-T[i])/(Tc-T_r1+1e-6) if T[i]<Tc else (T[i]-Tc)/(T_r2-Tc+1e-6)
 
-            ax_master.plot(theta,DeltaS_norm,label=f"H={H}T")
+            ax_master.plot(theta,DeltaS_norm,label=f"{H:.1f}T")
 
         ax_master.legend()
+        plt.tight_layout()
         st.pyplot(fig_master)
 
         st.download_button("📥 Arrott PDF",
@@ -213,7 +235,7 @@ if file:
         "M_1T":M_matrix[:,0],
         "M_2T":M_matrix[:,1],
         "M_3T":M_matrix[:,2],
-        "M_5T_NN":M_5T,
+        f"M_{H_user:.1f}T_NN":M_user,
         "DeltaS":deltaS,
         "n(T)":n_T
     })
@@ -226,9 +248,7 @@ if file:
     st.subheader("Download Excel")
     st.download_button("📥 Full Excel File",
                        data=to_excel_full(df_export,df_stats),
-                       file_name="Magnetocaloric_Walid_Final.xlsx")
+                       file_name="Magnetocaloric_Final.xlsx")
 
 else:
     st.info("Upload your CSV file.")
-
-

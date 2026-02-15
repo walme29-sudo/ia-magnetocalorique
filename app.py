@@ -37,6 +37,23 @@ with col2:
     st.markdown("**DALHOUMI WALID**")
 
 st.divider()
+# ================= SIDEBAR CONFIG =================
+with st.sidebar:
+    st.header("⚙️ Configuration IA")
+    st.write("Ajustez les architectures des réseaux de neurones pour comparer les surfaces.")
+    
+    # Paramètres pour le Modèle A (celui utilisé partout dans l'app)
+    st.subheader("Modèle A (Principal)")
+    nodes_m1 = st.slider("Nombre de neurones (A)", 32, 256, 128, step=32)
+    
+    st.divider()
+    
+    # Paramètres pour le Modèle B (uniquement pour la comparaison 3D)
+    st.subheader("Modèle B (Comparaison)")
+    nodes_m2 = st.slider("Nombre de neurones (B)", 32, 256, 64, step=32)
+    
+    st.info("Note : Le modèle A est celui utilisé pour le calcul de ΔS et des paramètres thermodynamiques.")
+
 
 # ================= FILE UPLOAD =================
 file = st.file_uploader("Upload CSV (T, M_1T, M_2T, M_3T)", type=["csv"])
@@ -65,11 +82,12 @@ if file:
     X_scaled = scaler_X.fit_transform(X)
     y_scaled = scaler_y.fit_transform(y.reshape(-1,1)).ravel()
 
-    model = MLPRegressor(hidden_layer_sizes=(128,128),
-                         activation='relu',
-                         solver='adam',
-                         max_iter=6000,
-                         random_state=42)
+    model = MLPRegressor(hidden_layer_sizes=(nodes_m1, nodes_m1), # Utilise le slider !
+                     activation='relu',
+                     solver='adam',
+                     max_iter=6000,
+                     random_state=42)
+
 
     model.fit(X_scaled, y_scaled)
 
@@ -200,25 +218,68 @@ if file:
         ax_master.legend()
         st.pyplot(fig_master)
 
-    with tab4:
-        st.subheader("🧬 Surface 3D M(T,H) Interactive")
-        
-        # Génération de la surface
-        H_surface = np.linspace(0.1, H_user, 30)
+        with tab4:
+        st.subheader("🧬 Comparaison 3D : Modèle A vs Modèle B")
+
+        # --- ENTRAÎNEMENT DU MODÈLE B (Comparaison) ---
+        # Le Modèle A est déjà entraîné plus haut (variable 'model')
+        model_B = MLPRegressor(hidden_layer_sizes=(nodes_m2, nodes_m2),
+                             activation='relu', solver='adam', max_iter=5000, random_state=1)
+        model_B.fit(X_scaled, y_scaled)
+
+        # --- GÉNÉRATION DES DONNÉES DE SURFACE ---
+        H_surface = np.linspace(0.1, H_user, 40)
         T_surface = T
         T_grid, H_grid = np.meshgrid(T_surface, H_surface)
-        
         X_surf = np.column_stack([T_grid.ravel(), H_grid.ravel()])
         X_surf_scaled = scaler_X.transform(X_surf)
-        M_surf = scaler_y.inverse_transform(model.predict(X_surf_scaled).reshape(-1,1)).reshape(len(H_surface), len(T_surface))
 
-        # Graphique Plotly
-        fig_3d = go.Figure(data=[go.Surface(z=M_surf, x=T_surface, y=H_surface, colorscale='Viridis')])
-        fig_3d.update_layout(
-            scene=dict(xaxis_title='T (K)', yaxis_title='H (T)', zaxis_title='M'),
-            width=800, height=600, margin=dict(l=0, r=0, b=0, t=40)
+        # Prédiction Modèle A
+        M_surf_A = scaler_y.inverse_transform(
+            model.predict(X_surf_scaled).reshape(-1,1)
+        ).reshape(len(H_surface), len(T_surface))
+
+        # Prédiction Modèle B
+        M_surf_B = scaler_y.inverse_transform(
+            model_B.predict(X_surf_scaled).reshape(-1,1)
+        ).reshape(len(H_surface), len(T_surface))
+
+        # --- GRAPHIQUE COMPARATIF ---
+        fig_comp = go.Figure()
+
+        # Surface Modèle A (Couleur Viridis)
+        fig_comp.add_trace(go.Surface(
+            z=M_surf_A, x=T_surface, y=H_surface,
+            colorscale='Viridis',
+            name=f'Modèle A ({nodes_m1} nodes)',
+            showscale=False,
+            opacity=0.9
+        ))
+
+        # Surface Modèle B (Couleur Rouge/Feu pour contraster)
+        fig_comp.add_trace(go.Surface(
+            z=M_surf_B, x=T_surface, y=H_surface,
+            colorscale='Reds',
+            name=f'Modèle B ({nodes_m2} nodes)',
+            showscale=False,
+            opacity=0.6 # Plus transparent pour voir les intersections
+        ))
+
+        fig_comp.update_layout(
+            title="Superposition des surfaces (A: Vert/Bleu, B: Rouge)",
+            scene=dict(
+                xaxis_title='T (K)',
+                yaxis_title='H (T)',
+                zaxis_title='M'
+            ),
+            width=900, height=700
         )
-        st.plotly_chart(fig_3d, use_container_width=True)
+
+        st.plotly_chart(fig_comp, use_container_width=True)
+        
+        st.info(f"💡 La surface **Rouge** représente le modèle B ({nodes_m2} neurones). "
+                f"Si elle s'écarte de la surface **Viridis**, cela montre l'impact de l'architecture sur l'extrapolation.")
+
 
     # ================= EXPORT EXCEL =================
     st.subheader("Download Results")
@@ -231,4 +292,5 @@ if file:
         "Value":[Smax,RCP,RC,n_exponent,Tc]
     })
     st.download_button("📥 Full Excel File", data=to_excel_full(df_export,df_stats), file_name="Magnetocaloric_Final.xlsx")
+
 

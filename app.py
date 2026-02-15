@@ -3,11 +3,13 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import plotly.graph_objects as go
+
 from sklearn.neural_network import MLPRegressor
 from sklearn.linear_model import LinearRegression
-from skleaimport streamlit as st
-import pandas as pd
-import numpy as np
+from sklearn.preprocessing import StandardScaler
+
+from io import BytesIO
+
 import matplotlib.pyplot as plt
 import plotly.graph_objects as go
 from sklearn.neural_network import MLPRegressor
@@ -335,4 +337,5 @@ if file:
         data=df_export.to_csv(index=False),
         file_name="Magneto_Expert_PRO.csv"
     )
+
 

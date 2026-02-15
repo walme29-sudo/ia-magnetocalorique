@@ -7,7 +7,7 @@ from sklearn.preprocessing import StandardScaler
 from io import BytesIO
 
 # ================= CONFIG =================
-st.set_page_config(page_title="IA Magnétocalorique", layout="wide")
+st.markdown("🧲 **IA Magnétocalorique - Neural Network Global**")
 
 # ================= EXPORT FUNCTIONS =================
 def to_excel_full(df_main, df_stats):
@@ -157,7 +157,7 @@ if file:
         st.line_chart(df_ds)
 
         st.subheader("Exposant critique n(T)")
-        fig_n, ax_n = plt.subplots()
+        fig_n, ax_n = plt.subplots(figsize=(5.5,3.5))
         ax_n.plot(T,n_T)
         ax_n.axvline(Tc, linestyle='--')
         ax_n.set_xlabel("T (K)")
@@ -166,7 +166,7 @@ if file:
 
     with tab3:
         st.subheader("Arrott Plot (H/M vs M²)")
-        fig_arrott, ax_arrott = plt.subplots()
+        fig_arrott, ax_arrott = plt.subplots(figsize=(5.5,3.5))
         for i,H in enumerate([1,2,3]):
             M = M_matrix[:,i]
             ax_arrott.plot(M**2,H/M,label=f"{H}T")
@@ -174,7 +174,7 @@ if file:
         st.pyplot(fig_arrott)
 
         st.subheader("Master Curve Multi-H")
-        fig_master, ax_master = plt.subplots()
+        fig_master, ax_master = plt.subplots(figsize=(5.5,3.5))
 
         for H in H_list_full:
             if H in [1,2,3]:
@@ -229,3 +229,4 @@ if file:
 
 else:
     st.info("Upload your CSV file.")
+

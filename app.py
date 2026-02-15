@@ -92,7 +92,7 @@ if file:
     indices = np.where(np.abs(deltaS) >= Smax/2)[0]
     FWHM = T[indices[-1]] - T[indices[0]] if len(indices)>1 else 0
     RCP = Smax*FWHM
-    RC = np.trapz(np.abs(deltaS), T)
+    RC = np.trapezoid(np.abs(deltaS), T)
     NRC = RCP/H_pred if H_pred!=0 else 0
 
     # ====== AFFICHAGE METRIQUES ======
@@ -137,6 +137,7 @@ if file:
     df_ex = pd.DataFrame({"T":T,"M_pred":M_pred,"ΔS":deltaS})
     df_st = pd.DataFrame({"Param":["Smax","RCP","RC","NRC","Tc"],"Valeur":[Smax,RCP,RC,NRC,Tc]})
     st.download_button("📥 Télécharger Excel", data=to_excel(df_ex, df_st), file_name="Magneto_IA.xlsx")
+
 
 
 

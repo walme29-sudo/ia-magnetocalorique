@@ -49,7 +49,7 @@ if file:
     elif "Temperature" in data.columns:
         T = data["Temperature"].values
     else:
-        T = data.iloc[:,0].values  # premier colonne si autre nom
+        T = data.iloc[:,0].values
 
     # ==== Lecture M (premiers 3 champs) ====
     H_cols = [col for col in data.columns if "H_" in col or "M_" in col]
@@ -57,9 +57,9 @@ if file:
         st.error("CSV doit contenir au moins 3 colonnes de M/H.")
     else:
         M_matrix = data[H_cols[:3]].values
+        H_known = np.array([1,2,3])  # champs correspondants aux colonnes
 
     # ===== NN TRAINING ======
-    H_known = np.array([1,2,3])
     Tg, Hg = np.meshgrid(T, H_known)
     X = np.column_stack([Tg.ravel(), Hg.ravel()])
     y = M_matrix.T.ravel()
@@ -80,7 +80,10 @@ if file:
     # ====== ΔS & Paramètres ======
     dM_dT = [np.gradient(M_matrix[:,i], T) for i in range(3)]
     dM_dT.append(np.gradient(M_pred, T))
-    deltaS = np.trapz(dM_dT, x=[1,2,3,H_pred], axis=0)
+    dM_dT_stack = np.vstack(dM_dT)  # shape (4, nT)
+    H_all = np.append(H_known, H_pred)
+    deltaS = np.trapz(dM_dT_stack, x=H_all, axis=0)
+
     Smax = np.max(np.abs(deltaS))
     Tc = T[np.argmax(np.abs(deltaS))]
 
@@ -123,4 +126,12 @@ if file:
     with tab2:
         fig3, ax3 = plt.subplots(figsize=(5,4))
         ax3.plot(T, np.abs(deltaS), label="|ΔS|", color='blue', lw=2)
-        st.pyplot(fig3)
+        theta = (T-Tc)/FWHM if FWHM>0 else T-Tc
+        ax3.plot(theta, np.abs(deltaS)/Smax, label="Master Curve", color='green', lw=2)
+        ax3.set_xlabel("T-Tc ou θ"); ax3.set_ylabel("ΔS / ΔSmax")
+        ax3.legend(fontsize='small'); st.pyplot(fig3)
+
+    # ====== EXPORT ======
+    df_ex = pd.DataFrame({"T":T,"M_pred":M_pred,"ΔS":deltaS})
+    df_st = pd.DataFrame({"Param":["Smax","RCP","RC","NRC","Tc"],"Valeur":[Smax,RCP,RC,NRC,Tc]})
+    st.download_button("📥 Télécharger Excel", data=to_excel(df_ex, df_st), file_name="Magneto_IA.xlsx")

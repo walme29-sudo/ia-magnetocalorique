@@ -159,6 +159,7 @@ if file:
         st.subheader("Exposant critique n(T)")
         fig_n, ax_n = plt.subplots(figsize=(5.5,3.5))
         ax_n.plot(T,n_T)
+        plt.tight_layout()
         ax_n.axvline(Tc, linestyle='--')
         ax_n.set_xlabel("T (K)")
         ax_n.set_ylabel("n(T)")
@@ -229,4 +230,5 @@ if file:
 
 else:
     st.info("Upload your CSV file.")
+
 

@@ -11,7 +11,7 @@ from io import BytesIO
 # ================= CONFIGURATION PAGE =================
 st.set_page_config(page_title="IA Magnétocalorique Expert", layout="wide")
 
-# ================= FONCTIONS D'EXPORT =================
+# ================= FONCTIONS TECHNIQUES =================
 def to_excel_full(df_main, df_stats):
     output = BytesIO()
     with pd.ExcelWriter(output, engine='openpyxl') as writer:
@@ -24,7 +24,7 @@ def plot_to_pdf(fig):
     fig.savefig(output, format="pdf", bbox_inches='tight')
     return output.getvalue()
 
-# ================= BARRE LATÉRALE (SIDEBAR) =================
+# ================= BARRE LATÉRALE =================
 with st.sidebar:
     st.header("⚙️ Configuration IA & Physique")
     nodes_m1 = st.slider("Neurones Modèle A (Principal)", 32, 256, 128, step=32)
@@ -81,18 +81,16 @@ if file:
     Smax = np.max(np.abs(deltaS))
     Tc = T[np.argmax(np.abs(deltaS))]
 
-    # --- Paramètres Experts (Calcul FWHM sécurisé) ---
+    # --- Paramètres Experts ---
     indices_arr = np.where(np.abs(deltaS) >= Smax/2)[0]
     if len(indices_arr) > 1:
         FWHM = T[indices_arr[-1]] - T[indices_arr[0]]
         RCP = Smax * FWHM
     else:
         FWHM, RCP = 0, 0
-        
+    
     RC = np.trapezoid(np.abs(deltaS), T)
     NRC = RCP / H_user if H_user != 0 else 0
-    
-    # TEC
     TEC = [np.mean(np.abs(deltaS)[(T >= t - deltaT_tec/2) & (T <= t + deltaT_tec/2)]) for t in T]
     TEC_max = np.max(TEC)
 
@@ -105,18 +103,54 @@ if file:
     m5.metric("Tc (K)", f"{Tc:.1f}")
 
     # ================= ONGLETS (TABS) =================
-    tab1, tab2, tab3, tab4 = st.tabs(["📈 Aimantation", "❄️ Entropie & TEC", "🧲 Arrott Fit", "🧬 Comparaison 3D"])
+    tab1, tab2, tab3, tab4 = st.tabs(["📈 Courbes M & H/M", "❄️ Entropie & TEC", "🧲 Arrott Fit", "🧬 Comparaison 3D"])
 
     with tab1:
-        df_m = pd.DataFrame({"1T": M_matrix[:,0], "3T": M_matrix[:,2], f"{H_user}T (IA)": M_u}, index=T)
-        st.line_chart(df_m)
+        st.subheader("📈 Analyse Magnétique Multi-Champs")
+        col_g1, col_g2 = st.columns(2)
+        champs_list = [1, 2, 3, H_user]
+        couleurs = ['black', 'red', 'green', 'cyan']
+        M_list = [M_matrix[:,0], M_matrix[:,1], M_matrix[:,2], M_u]
+
+        with col_g1:
+            fig_m, ax_m = plt.subplots(figsize=(5, 4))
+            for m, h, c in zip(M_list, champs_list, couleurs):
+                label = f"{h}T (Exp)" if h <= 3 else f"{h}T (IA)"
+                ax_m.plot(T, m, label=label, color=c, lw=1.5)
+            ax_m.set_xlabel("T (K)"); ax_m.set_ylabel("M (emu/g)")
+            ax_m.set_title("Magnétisation M(T)"); ax_m.legend(fontsize='small'); st.pyplot(fig_m)
+
+        with col_g2:
+            fig_hm, ax_hm = plt.subplots(figsize=(5, 4))
+            for m, h, c in zip(M_list, champs_list, couleurs):
+                mask = m > 0.1
+                ax_hm.plot(T[mask], h / m[mask], color=c, lw=1.5)
+            ax_hm.set_xlabel("T (K)"); ax_hm.set_ylabel("H/M (T.g/emu)")
+            ax_hm.set_title("Susceptibilité Inverse H/M(T)"); st.pyplot(fig_hm)
+
+        st.divider()
+        st.subheader("🔍 Analyse de Curie-Weiss (Phase Paramagnétique)")
+        mask_para = T > (Tc + 10)
+        if any(mask_para) and len(T[mask_para]) > 5:
+            T_fit = T[mask_para].reshape(-1, 1)
+            Y_fit = (H_user / M_u[mask_para]).reshape(-1, 1)
+            reg_cw = LinearRegression().fit(T_fit, Y_fit)
+            pente = float(reg_cw.coef_[0][0])
+            theta_p = -float(reg_cw.intercept_[0]) / pente
+            mu_eff = np.sqrt(8 * (1/pente)) if pente > 0 else 0
+            
+            c1, c2, c3 = st.columns(3)
+            c1.info(f"**Temp. Curie Para (θp) :** {theta_p:.1f} K")
+            c2.info(f"**Moment Effectif (μeff) :** {mu_eff:.2f} μB")
+            c3.success(f"**R² du Fit Para :** {reg_cw.score(T_fit, Y_fit):.4f}")
+        else:
+            st.warning("Plage de température insuffisante après Tc pour l'analyse Curie-Weiss.")
 
     with tab2:
         fig_th, ax_th = plt.subplots(figsize=(6, 3.5))
         ax_th.plot(T, np.abs(deltaS), label="|ΔS|", color='blue', lw=2)
         ax_th.plot(T, TEC, label=f"TEC({deltaT_tec}K)", color='orange', ls='--')
-        ax_th.set_title("Variation d'Entropie vs Température")
-        ax_th.set_xlabel("T (K)"); ax_th.legend(); st.pyplot(fig_th)
+        ax_th.set_title("Variation d'Entropie vs Température"); ax_th.legend(); st.pyplot(fig_th)
 
     with tab3:
         st.subheader("Analyse de Transition & Fit Linéaire $y=ax+b$")
@@ -126,23 +160,14 @@ if file:
             fig_ar, ax_ar = plt.subplots(figsize=(5, 4))
             mask = (M_u > 1e-6)
             X_f, Y_f = (M_u[mask]**2).reshape(-1, 1), (H_user / M_u[mask]).reshape(-1, 1)
-            
             if len(X_f) > 1:
                 reg = LinearRegression().fit(X_f, Y_f)
-                ax_ar.scatter(X_f, Y_f, alpha=0.3, s=10, label="Données")
-                ax_ar.plot(X_f, reg.predict(X_f), color='red', label="Fit Linéaire")
-                ax_ar.set_xlabel("$M^2$"); ax_ar.set_ylabel("$H/M$"); ax_ar.legend()
-                st.pyplot(fig_ar)
-                
-                # --- CORRECTION TYPEERROR ICI ---
-                pente = float(reg.coef_[0][0]) if isinstance(reg.coef_, np.ndarray) else float(reg.coef_)
-                intercept = float(reg.intercept_[0]) if isinstance(reg.intercept_, (np.ndarray, list)) else float(reg.intercept_)
-                
-                ordre = "2ème" if pente > 0 else "1er"
-                st.success(f"Équation : **y = {pente:.4e}x + {intercept:.4f}**")
-                st.info(f"Transition de **{ordre} ordre** suggérée.")
-            else:
-                st.warning("Données insuffisantes pour le fit linéaire.")
+                ax_ar.scatter(X_f, Y_f, alpha=0.3, s=10)
+                ax_ar.plot(X_f, reg.predict(X_f), color='red')
+                ax_ar.set_xlabel("$M^2$"); ax_ar.set_ylabel("$H/M$"); st.pyplot(fig_ar)
+                p = float(reg.coef_[0][0]); i = float(reg.intercept_[0])
+                st.success(f"Équation : **y = {p:.4e}x + {i:.4f}**")
+                st.info(f"Transition de **{'2ème' if p > 0 else '1er'} ordre** suggérée.")
 
         with c2:
             st.markdown("**Master Curve (Scaling Universel)**")
@@ -151,10 +176,7 @@ if file:
                 theta = np.where(T <= Tc, -(T-Tc)/(t_r1-Tc+1e-6), (T-Tc)/(t_r2-Tc+1e-6))
                 fig_ms, ax_ms = plt.subplots(figsize=(5, 4))
                 ax_ms.plot(theta, np.abs(deltaS)/Smax, color='green', lw=2)
-                ax_ms.set_xlabel(r"$\theta$ (Réduit)"); ax_ms.set_ylabel(r"$\Delta S / \Delta S_{max}$")
-                st.pyplot(fig_ms)
-            else:
-                st.warning("Impossible de générer la Master Curve (ΔS trop étroit).")
+                ax_ms.set_xlabel(r"$\theta$"); ax_ms.set_ylabel(r"$\Delta S / \Delta S_{max}$"); st.pyplot(fig_ms)
 
     with tab4:
         st.subheader("🧬 Comparaison Surfaces 3D (Modèle A vs B)")
@@ -164,63 +186,13 @@ if file:
         X_sf = scaler_X.transform(np.column_stack([Ts_g.ravel(), Hs_g.ravel()]))
         ZA = scaler_y.inverse_transform(model.predict(X_sf).reshape(-1,1)).reshape(len(H_sr), len(T))
         ZB = scaler_y.inverse_transform(model_B.predict(X_sf).reshape(-1,1)).reshape(len(H_sr), len(T))
-        
-        fig3d = go.Figure(data=[
-            go.Surface(z=ZA, x=T, y=H_sr, colorscale='Viridis', name='Modèle A'),
-            go.Surface(z=ZB, x=T, y=H_sr, colorscale='Reds', opacity=0.4, name='Modèle B', showscale=False)
-        ])
-        fig3d.update_layout(scene=dict(xaxis_title='T (K)', yaxis_title='H (T)', zaxis_title='M'), height=650)
+        fig3d = go.Figure(data=[go.Surface(z=ZA, x=T, y=H_sr, colorscale='Viridis', name='A'),
+                                go.Surface(z=ZB, x=T, y=H_sr, colorscale='Reds', opacity=0.4, showscale=False)])
+        fig3d.update_layout(scene=dict(xaxis_title='T', yaxis_title='H', zaxis_title='M'), height=600)
         st.plotly_chart(fig3d, use_container_width=True)
 
     # ================= EXPORTS =================
     st.divider()
     df_ex = pd.DataFrame({"T":T, "M_pred":M_u, "DeltaS":deltaS})
     df_st = pd.DataFrame({"Paramètre":["Smax", "RCP", "TEC_max", "NRC", "Tc"], "Valeur":[Smax, RCP, TEC_max, NRC, Tc]})
-    st.download_button("📥 Télécharger Résultats (Excel)", data=to_excel_full(df_ex, df_st), file_name="Analyse_IA_Expert_Final.xlsx")
-    with tab5:
-        st.subheader("📈 Courbes Magnétiques Multi-Champs")
-    
-        # 1. Graphique de Magnétisation M(T)
-        fig_m, ax_m = plt.subplots(figsize=(6, 4))
-    
-        # Tracer les données expérimentales du CSV
-        champs_exp = [1, 2, 3] # Ajustez selon vos colonnes M_1T, M_2T, M_3T
-        couleurs = ['black', 'red', 'green', 'blue']
-    
-        for i, H in enumerate(champs_exp):
-            ax_m.plot(T, M_matrix[:, i], label=f"{H} T (Exp)", color=couleurs[i], linestyle='--')
-    
-        # Tracer la prédiction IA (votre courbe personnalisée)
-        ax_m.plot(T, M_user, label=f"{H_user} T (IA)", color='cyan', linewidth=2)
-    
-        ax_m.set_xlabel("T (K)")
-        ax_m.set_ylabel("M (emu/g)")
-        ax_m.legend()
-        ax_m.grid(True, alpha=0.3)
-        st.pyplot(fig_m)
-
-        st.divider()
-
-        # 2. Graphique H/M en fonction de T (Susceptibilité inverse)
-        st.subheader("📊 Analyse H/M (Banerjee/Curie-Weiss)")
-        fig_hm, ax_hm = plt.subplots(figsize=(6, 4))
-    
-        # Calcul et tracé pour chaque champ
-        for i, H in enumerate(champs_exp):
-            mask = M_matrix[:, i] > 1e-6 # Éviter division par zéro
-            ax_hm.plot(T[mask], H / M_matrix[mask, i], label=f"{H} T", color=couleurs[i])
-    
-        # Ajout de la courbe prédite
-        mask_u = M_user > 1e-6
-        ax_hm.plot(T[mask_u], H_user / M_user[mask_u], label=f"{H_user} T (IA)", color='cyan', linewidth=2)
-    
-        ax_hm.set_xlabel("T (K)")
-        ax_hm.set_ylabel("H/M (T.g/emu)")
-        ax_hm.legend()
-        ax_hm.grid(True, alpha=0.3)
-        st.pyplot(fig_hm)
-
-
-else:
-    st.info("👋 Veuillez charger un fichier CSV pour démarrer l'analyse.")
-
+    st.download_button("📥 Télécharger Résultats (Excel)", data=to_excel_full(df_ex, df_st), file_name="Magneto_Analyse_IA.xlsx")

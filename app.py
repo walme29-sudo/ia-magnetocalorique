@@ -42,7 +42,7 @@ with col1:
         st.markdown("### ISSAT")
 with col2:
     st.markdown("## 🧲 IA Magnétocalorique - Analyse Expert")
-    st.markdown("**DALHOUMI WALID**")
+    st.markdown("**Élaboré par : DALHOUMI WALID**")
 
 st.divider()
 
@@ -81,10 +81,14 @@ if file:
     Smax = np.max(np.abs(deltaS))
     Tc = T[np.argmax(np.abs(deltaS))]
 
-    # --- Paramètres Experts ---
-    # Recherche des indices pour FWHM (Crucial pour Master Curve)
-    indices = np.where(np.abs(deltaS) >= Smax/2)[0]
-    RCP = Smax * (T[indices[-1]] - T[indices[0]]) if len(indices) > 1 else 0
+    # --- Paramètres Experts (Calcul FWHM sécurisé) ---
+    indices_arr = np.where(np.abs(deltaS) >= Smax/2)[0]
+    if len(indices_arr) > 1:
+        FWHM = T[indices_arr[-1]] - T[indices_arr[0]]
+        RCP = Smax * FWHM
+    else:
+        FWHM, RCP = 0, 0
+        
     RC = np.trapezoid(np.abs(deltaS), T)
     NRC = RCP / H_user if H_user != 0 else 0
     
@@ -111,7 +115,8 @@ if file:
         fig_th, ax_th = plt.subplots(figsize=(6, 3.5))
         ax_th.plot(T, np.abs(deltaS), label="|ΔS|", color='blue', lw=2)
         ax_th.plot(T, TEC, label=f"TEC({deltaT_tec}K)", color='orange', ls='--')
-        ax_th.set_title("Entropie vs Température"); ax_th.legend(); st.pyplot(fig_th)
+        ax_th.set_title("Variation d'Entropie vs Température")
+        ax_th.set_xlabel("T (K)"); ax_th.legend(); st.pyplot(fig_th)
 
     with tab3:
         st.subheader("Analyse de Transition & Fit Linéaire $y=ax+b$")
@@ -122,28 +127,34 @@ if file:
             mask = (M_u > 1e-6)
             X_f, Y_f = (M_u[mask]**2).reshape(-1, 1), (H_user / M_u[mask]).reshape(-1, 1)
             
-            # Régression Linéaire f(x) = ax + b
-            reg = LinearRegression().fit(X_f, Y_f)
-            ax_ar.scatter(X_f, Y_f, alpha=0.3, s=10, label="Données")
-            ax_ar.plot(X_f, reg.predict(X_f), color='red', label="Fit Linéaire")
-            ax_ar.set_xlabel("$M^2$"); ax_ar.set_ylabel("$H/M$"); ax_ar.legend()
-            st.pyplot(fig_ar)
-            
-            pente = float(reg.coef_)
-            ordre = "2ème" if pente > 0 else "1er"
-            st.success(f"Équation : **y = {pente:.4e}x + {float(reg.intercept_):.4f}**")
-            st.info(f"Transition de **{ordre} ordre** suggérée.")
+            if len(X_f) > 1:
+                reg = LinearRegression().fit(X_f, Y_f)
+                ax_ar.scatter(X_f, Y_f, alpha=0.3, s=10, label="Données")
+                ax_ar.plot(X_f, reg.predict(X_f), color='red', label="Fit Linéaire")
+                ax_ar.set_xlabel("$M^2$"); ax_ar.set_ylabel("$H/M$"); ax_ar.legend()
+                st.pyplot(fig_ar)
+                
+                # --- CORRECTION TYPEERROR ICI ---
+                pente = float(reg.coef_[0][0]) if isinstance(reg.coef_, np.ndarray) else float(reg.coef_)
+                intercept = float(reg.intercept_[0]) if isinstance(reg.intercept_, (np.ndarray, list)) else float(reg.intercept_)
+                
+                ordre = "2ème" if pente > 0 else "1er"
+                st.success(f"Équation : **y = {pente:.4e}x + {intercept:.4f}**")
+                st.info(f"Transition de **{ordre} ordre** suggérée.")
+            else:
+                st.warning("Données insuffisantes pour le fit linéaire.")
 
         with c2:
             st.markdown("**Master Curve (Scaling Universel)**")
-            if len(indices) > 1:
-                t_r1, t_r2 = T[indices[0]], T[indices[-1]]
+            if len(indices_arr) > 1:
+                t_r1, t_r2 = T[indices_arr[0]], T[indices_arr[-1]]
                 theta = np.where(T <= Tc, -(T-Tc)/(t_r1-Tc+1e-6), (T-Tc)/(t_r2-Tc+1e-6))
                 fig_ms, ax_ms = plt.subplots(figsize=(5, 4))
                 ax_ms.plot(theta, np.abs(deltaS)/Smax, color='green', lw=2)
-                ax_ms.set_xlabel(r"$\theta$"); ax_ms.set_ylabel(r"$\Delta S / \Delta S_{max}$"); st.pyplot(fig_ms)
+                ax_ms.set_xlabel(r"$\theta$ (Réduit)"); ax_ms.set_ylabel(r"$\Delta S / \Delta S_{max}$")
+                st.pyplot(fig_ms)
             else:
-                st.warning("Données FWHM insuffisantes.")
+                st.warning("Impossible de générer la Master Curve (ΔS trop étroit).")
 
     with tab4:
         st.subheader("🧬 Comparaison Surfaces 3D (Modèle A vs B)")
@@ -164,8 +175,8 @@ if file:
     # ================= EXPORTS =================
     st.divider()
     df_ex = pd.DataFrame({"T":T, "M_pred":M_u, "DeltaS":deltaS})
-    df_st = pd.DataFrame({"Metric":["Smax", "RCP", "TEC_max", "NRC", "Tc"], "Val":[Smax, RCP, TEC_max, NRC, Tc]})
-    st.download_button("📥 Télécharger Résultats (Excel)", data=to_excel_full(df_ex, df_st), file_name="Analyse_IA_Final.xlsx")
+    df_st = pd.DataFrame({"Paramètre":["Smax", "RCP", "TEC_max", "NRC", "Tc"], "Valeur":[Smax, RCP, TEC_max, NRC, Tc]})
+    st.download_button("📥 Télécharger Résultats (Excel)", data=to_excel_full(df_ex, df_st), file_name="Analyse_IA_Expert_Final.xlsx")
 
 else:
-    st.info("Veuillez charger un fichier CSV pour démarrer l'analyse.")
+    st.info("👋 Veuillez charger un fichier CSV pour démarrer l'analyse.")

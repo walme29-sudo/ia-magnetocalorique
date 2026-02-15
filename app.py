@@ -98,11 +98,11 @@ if file:
         X_temp_scaled = scaler_X.transform(X_temp)
         M_temp = scaler_y.inverse_transform(model.predict(X_temp_scaled).reshape(-1,1)).ravel()
 
-            if H in [1,2,3]:
-            idx = int(H)-1  # H=1->0, H=2->1, H=3->2
-            dM_dT = np.gradient(M_matrix[:,idx], T)
-            else:
-            dM_dT = np.gradient(M_temp, T)
+    if H in [1,2,3]:
+        idx = int(H)-1  # H=1->0, H=2->1, H=3->2
+        dM_dT = np.gradient(M_matrix[:,idx], T)
+    else:
+        dM_dT = np.gradient(M_temp, T)
 
         DeltaS_temp = np.trapezoid([dM_dT], x=[H], axis=0)
         DeltaS_norm = DeltaS_temp / np.max(np.abs(deltaS))
@@ -193,5 +193,6 @@ if file:
 
 else:
     st.info("Veuillez charger un fichier CSV.")
+
 
 

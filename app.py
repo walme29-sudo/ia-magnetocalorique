@@ -286,7 +286,8 @@ if file:
     st.pyplot(fig)
 
 
-else:
-st.info("Upload your CSV file.")
+    else:
+    st.info("Upload your CSV file.")
+
 
 

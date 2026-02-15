@@ -177,6 +177,50 @@ if file:
     df_ex = pd.DataFrame({"T":T, "M_pred":M_u, "DeltaS":deltaS})
     df_st = pd.DataFrame({"Paramètre":["Smax", "RCP", "TEC_max", "NRC", "Tc"], "Valeur":[Smax, RCP, TEC_max, NRC, Tc]})
     st.download_button("📥 Télécharger Résultats (Excel)", data=to_excel_full(df_ex, df_st), file_name="Analyse_IA_Expert_Final.xlsx")
+    with tab5:
+        st.subheader("📈 Courbes Magnétiques Multi-Champs")
+    
+        # 1. Graphique de Magnétisation M(T)
+        fig_m, ax_m = plt.subplots(figsize=(6, 4))
+    
+        # Tracer les données expérimentales du CSV
+        champs_exp = [1, 2, 3] # Ajustez selon vos colonnes M_1T, M_2T, M_3T
+        couleurs = ['black', 'red', 'green', 'blue']
+    
+        for i, H in enumerate(champs_exp):
+            ax_m.plot(T, M_matrix[:, i], label=f"{H} T (Exp)", color=couleurs[i], linestyle='--')
+    
+        # Tracer la prédiction IA (votre courbe personnalisée)
+        ax_m.plot(T, M_user, label=f"{H_user} T (IA)", color='cyan', linewidth=2)
+    
+        ax_m.set_xlabel("T (K)")
+        ax_m.set_ylabel("M (emu/g)")
+        ax_m.legend()
+        ax_m.grid(True, alpha=0.3)
+        st.pyplot(fig_m)
+
+        st.divider()
+
+        # 2. Graphique H/M en fonction de T (Susceptibilité inverse)
+        st.subheader("📊 Analyse H/M (Banerjee/Curie-Weiss)")
+        fig_hm, ax_hm = plt.subplots(figsize=(6, 4))
+    
+        # Calcul et tracé pour chaque champ
+        for i, H in enumerate(champs_exp):
+            mask = M_matrix[:, i] > 1e-6 # Éviter division par zéro
+            ax_hm.plot(T[mask], H / M_matrix[mask, i], label=f"{H} T", color=couleurs[i])
+    
+        # Ajout de la courbe prédite
+        mask_u = M_user > 1e-6
+        ax_hm.plot(T[mask_u], H_user / M_user[mask_u], label=f"{H_user} T (IA)", color='cyan', linewidth=2)
+    
+        ax_hm.set_xlabel("T (K)")
+        ax_hm.set_ylabel("H/M (T.g/emu)")
+        ax_hm.legend()
+        ax_hm.grid(True, alpha=0.3)
+        st.pyplot(fig_hm)
+
 
 else:
     st.info("👋 Veuillez charger un fichier CSV pour démarrer l'analyse.")
+

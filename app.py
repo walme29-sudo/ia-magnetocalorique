@@ -82,7 +82,7 @@ if file:
     dM_dT.append(np.gradient(M_pred, T))
     dM_dT_stack = np.vstack(dM_dT)  # shape (4, nT)
     H_all = np.append(H_known, H_pred)
-    deltaS = np.trapzoid(dM_dT_stack, x=H_all, axis=0)
+    deltaS = np.trapzoidal(dM_dT_stack, x=H_all, axis=0)
 
     Smax = np.max(np.abs(deltaS))
     Tc = T[np.argmax(np.abs(deltaS))]
@@ -135,4 +135,5 @@ if file:
     df_ex = pd.DataFrame({"T":T,"M_pred":M_pred,"ΔS":deltaS})
     df_st = pd.DataFrame({"Param":["Smax","RCP","RC","NRC","Tc"],"Valeur":[Smax,RCP,RC,NRC,Tc]})
     st.download_button("📥 Télécharger Excel", data=to_excel(df_ex, df_st), file_name="Magneto_IA.xlsx")
+
 

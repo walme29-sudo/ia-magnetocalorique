@@ -146,10 +146,67 @@ if file:
             ax_n.set_xlabel("T (K)"); ax_n.set_ylabel("n")
             st.pyplot(fig_n)
 
-    with tab3:
-        st.subheader("Arrott Plot & Master Curve")
-        # Ici vous pouvez insérer vos codes de Master Curve existants...
-        st.info("Graphiques disponibles dans l'export PDF ci-dessous.")
+        with tab3:
+        st.subheader("Analyse de Transition de Phase")
+        col_tab3_1, col_tab3_2 = st.columns(2)
+
+        # -------- Arrott Plot (H/M vs M²) --------
+        with col_tab3_1:
+            st.markdown("**Arrott Plot (Critère de Banerjee)**")
+            fig_arrott, ax_arrott = plt.subplots(figsize=(5, 4))
+            
+            H_plot_list = [1, 2, 3, H_user]
+            M_plot_list = [M_matrix[:,0], M_matrix[:,1], M_matrix[:,2], M_user]
+            
+            for h_val, m_val in zip(H_plot_list, M_plot_list):
+                mask = m_val > 0  # Éviter division par zéro
+                m2 = m_val[mask]**2
+                hoverm = h_val / m_val[mask]
+                ax_arrott.plot(m2, hoverm, label=f"{h_val:.1f}T")
+            
+            ax_arrott.set_xlabel("$M^2$")
+            ax_arrott.set_ylabel("$H/M$")
+            ax_arrott.legend()
+            st.pyplot(fig_arrott)
+
+        # -------- Master Curve (Normalisation) --------
+        with col_tab3_2:
+            st.markdown("**Master Curve (Scaling Loi d'échelle)**")
+            fig_master, ax_master = plt.subplots(figsize=(5, 4))
+            
+            # Calcul des points de référence pour theta
+            # On cherche T_r1 et T_r2 où DeltaS = 0.5 * Smax
+            idx_half = np.where(np.abs(deltaS) >= Smax/2)[0]
+            if len(idx_half) > 1:
+                t_r1, t_r2 = T[idx_half[0]], T[idx_half[-1]]
+                
+                for h_val, m_val in zip(H_plot_list, M_plot_list):
+                    # Calcul DeltaS local pour chaque champ
+                    ds_local = np.abs(np.gradient(m_val, T))
+                    ds_max_local = np.max(ds_local)
+                    
+                    # Définition de la variable réduite theta
+                    theta = np.zeros_like(T)
+                    for i in range(len(T)):
+                        if T[i] <= Tc:
+                            theta[i] = -(T[i] - Tc) / (t_r1 - Tc + 1e-6)
+                        else:
+                            theta[i] = (T[i] - Tc) / (t_r2 - Tc + 1e-6)
+                    
+                    ax_master.plot(theta, ds_local/ds_max_local, label=f"{h_val:.1f}T")
+                
+                ax_master.set_xlabel("$\\theta$ (Variable réduite)")
+                ax_master.set_ylabel("$\\Delta S / \\Delta S_{max}$")
+                ax_master.legend()
+                st.pyplot(fig_master)
+            else:
+                st.warning("Données insuffisantes pour calculer T_r1/T_r2 (Master Curve)")
+
+        # Boutons d'export PDF spécifiques
+        c_p1, c_p2 = st.columns(2)
+        c_p1.download_button("📥 Arrott Plot PDF", data=plot_to_pdf(fig_arrott), file_name="Arrott_Plot.pdf")
+        c_p2.download_button("📥 Master Curve PDF", data=plot_to_pdf(fig_master), file_name="Master_Curve.pdf")
+
 
     with tab4:
         st.subheader("🧬 Comparaison des Surfaces 3D (Modèle A vs B)")
@@ -189,3 +246,4 @@ if file:
 
 else:
     st.info("Veuillez charger un fichier CSV pour démarrer l'analyse.")
+

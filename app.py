@@ -287,7 +287,8 @@ if file:
 
 
     else:
-    st.info("Upload your CSV file.")
+        st.info("Upload your CSV file.")
+
 
 
 

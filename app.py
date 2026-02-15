@@ -10,155 +10,22 @@ from sklearn.preprocessing import StandardScaler
 
 from io import BytesIO
 
-import matplotlib.pyplot as plt
-import plotly.graph_objects as go
-from sklearn.neural_network import MLPRegressor
-from sklearn.linear_model import LinearRegression
-from sklearn.preprocessing import StandardScaler
-from io import BytesIO
-
-st.set_page_config(page_title="IA Magnetocalorique ULTRA PRO", layout="wide")
+# ================= PAGE CONFIG =================
+st.set_page_config(page_title="IA Magnetocalorique PRO", layout="wide")
 
 # ================= SIDEBAR =================
 with st.sidebar:
     st.header("⚙️ Configuration IA")
+
     nodes_A = st.slider("Neurones Modèle A", 32, 256, 128, step=32)
     nodes_B = st.slider("Neurones Modèle B", 32, 256, 64, step=32)
     deltaT_tec = st.slider("Fenêtre TEC (K)", 1, 10, 3)
 
-    alloy = st.selectbox("Type Alliage",
-                         ["Gd-based","LaFeSi","MnFePAs","Heusler"])
-
-theoretical_db = {
-    "Gd-based":{"Smax":10,"RCP":400},
-    "LaFeSi":{"Smax":20,"RCP":450},
-    "MnFePAs":{"Smax":18,"RCP":350},
-    "Heusler":{"Smax":12,"RCP":300}
-}
-
-st.title("🧲 IA Magnétocalorique – Version Complète Lourde")
-
-file = st.file_uploader("Upload CSV (T, M_1T, M_2T, M_3T)", type=["csv"])
-
-if file:
-
-    data = pd.read_csv(file).dropna()
-    T = data["T"].values
-    M_exp = data[["M_1T","M_2T","M_3T"]].values
-
-    # ================= TRAIN IA =================
-    H_known = np.array([1,2,3])
-    Tg, Hg = np.meshgrid(T,H_known)
-    X = np.column_stack([Tg.ravel(),Hg.ravel()])
-    y = M_exp.T.ravel()
-
-    scalerX, scalerY = StandardScaler(), StandardScaler()
-    Xs = scalerX.fit_transform(X)
-    ys = scalerY.fit_transform(y.reshape(-1,1)).ravel()
-
-    modelA = MLPRegressor(hidden_layer_sizes=(nodes_A,nodes_A),
-                          max_iter=5000,random_state=42)
-    modelA.fit(Xs,ys)
-
-    modelB = MLPRegressor(hidden_layer_sizes=(nodes_B,nodes_B),
-                          max_iter=3000,random_state=1)
-    modelB.fit(Xs,ys)
-
-    H_user = st.number_input("Champ cible (T)",0.1,10.0,5.0)
-
-    Xu = scalerX.transform(np.column_stack([T,np.full_like(T,H_user)]))
-    M_pred = scalerY.inverse_transform(
-        modelA.predict(Xu).reshape(-1,1)).ravel()
-
-    # ================= THERMO =================
-    dMdT = [np.gradient(m,T) for m in [M_exp[:,0],M_exp[:,1],M_exp[:,2],M_pred]]
-    deltaS = np.trapezoid(dMdT,x=[1,2,3,H_user],axis=0)
-
-    Smax = np.max(np.abs(deltaS))
-    Tc = T[np.argmax(np.abs(deltaS))]
-
-    idx = np.where(np.abs(deltaS)>=Smax/2)[0]
-    if len(idx)>1:
-        FWHM = T[idx[-1]]-T[idx[0]]
-        RCP = Smax*FWHM
-    else:
-        FWHM=0; RCP=0
-
-    RC = np.trapezoid(np.abs(deltaS),T)
-    q = RC
-    NRC = RCP/H_user if H_user!=0 else 0
-    Cp = 400
-    deltaTad = Smax*H_user/Cp
-    n_exp = np.gradient(np.log(np.abs(deltaS)+1e-6),
-                        np.log(H_user+1e-6))
-
-    # ================= METRICS =================
-    m1,m2,m3,m4,m5 = st.columns(5)
-    m1.metric("ΔSmax",f"{Smax:.2f}")
-    m2.metric("RCP",f"{RCP:.1f}")
-    m3.metric("RC (q)",f"{q:.1f}")
-    m4.metric("ΔTad",f"{deltaTad:.2f} K")
-    m5.metric("Tc",f"{Tc:.1f} K")
-
-    # ================= TABLEAU =================
-    st.subheader("📊 Comparaison IA vs Théorie")
-    theo = theoretical_db[alloy]
-    df_comp = pd.DataFrame({
-        "Paramètre":["ΔSmax","RCP"],
-        "IA":[Smax,RCP],
-        "Théorie":[theo["Smax"],theo["RCP"]],
-        "Écart %":[
-            100*(Smax-theo["Smax"])/theo["Smax"],
-            100*(RCP-theo["RCP"])/theo["RCP"]
-        ]
-    })
-    st.dataframe(df_comp,use_container_width=True)
-
-    # ================= TABS =================
-    tab1,tab2,tab3,tab4,tab5 = st.tabs([
-        "📈 Magnétisation",
-        "❄ Thermodynamique",
-        "🧲 Analyse Critique",
-        "🌐 Surfaces 3D",
-        "🖼 Heatmap HD"
-    ])
-
-    # ===== TAB1 =====
-    with tab1:
-        fig1,ax1 = plt.subplots()
-        colors=['black','red','green','blue']
-        M_list=[M_exp[:,0],M_exp[:,1],M_exp[:,2],M_pred]
-        H_list=[1,2,3,H_user]
-
-        for m,h,c in zip(M_list,H_list,colors):
-            ax1.plot(T,m,label=f"{h}T",color=c)
-        ax1.legend(); ax1.set_xlabel("T"); ax1.set_ylabel("M")
-        st.pyplot(fig1)
-
-        fig2,ax2 = plt.subplots()
-        for m,h,c in zip(M_list,H_list,colors):
-            mask=m>0.1
-            ax2.plot(T[mask],h/m[mask],co
-ocessing import StandardScaler
-from io import BytesIO
-
-# ================= CONFIG =================
-st.set_page_config(page_title="IA Magnétocalorique Expert PRO", layout="wide")
-
-# ================= SIDEBAR =================
-with st.sidebar:
-    st.header("⚙️ Configuration IA & Matériau")
-
-    nodes_m1 = st.slider("Neurones Modèle A", 32, 256, 128, step=32)
-    nodes_m2 = st.slider("Neurones Modèle B", 32, 256, 64, step=32)
-    deltaT_tec = st.slider("Fenêtre TEC (K)", 1, 10, 3)
-
-    alloy_type = st.selectbox(
-        "Type d’alliage",
+    alloy = st.selectbox(
+        "Type Alliage",
         ["Gd-based", "LaFeSi", "MnFePAs", "Heusler"]
     )
 
-# ================= VALEURS THEORIQUES =================
 theoretical_db = {
     "Gd-based": {"Smax": 10, "RCP": 400},
     "LaFeSi": {"Smax": 20, "RCP": 450},
@@ -166,176 +33,245 @@ theoretical_db = {
     "Heusler": {"Smax": 12, "RCP": 300}
 }
 
-# ================= HEADER =================
-st.title("🧲 IA Magnétocalorique – Version Expert Scientifique")
+# ================= TITLE =================
+st.title("🧲 IA Magnétocalorique – Version PRO Complète")
 
-# ================= LOAD DATA =================
-file = st.file_uploader("Charger CSV (T, M_1T, M_2T, M_3T)", type=["csv"])
+file = st.file_uploader("Upload CSV (T, M_1T, M_2T, M_3T)", type=["csv"])
 
 if file:
 
     data = pd.read_csv(file).dropna()
     T = data["T"].values
-    M_matrix = data[["M_1T","M_2T","M_3T"]].values
+    M_exp = data[["M_1T", "M_2T", "M_3T"]].values
 
     # ===== TRAIN IA =====
-    H_known = np.array([1,2,3])
+    H_known = np.array([1, 2, 3])
     Tg, Hg = np.meshgrid(T, H_known)
 
     X = np.column_stack([Tg.ravel(), Hg.ravel()])
-    y = M_matrix.T.ravel()
+    y = M_exp.T.ravel()
 
-    scaler_X, scaler_y = StandardScaler(), StandardScaler()
-    Xs = scaler_X.fit_transform(X)
-    ys = scaler_y.fit_transform(y.reshape(-1,1)).ravel()
+    scalerX = StandardScaler()
+    scalerY = StandardScaler()
 
-    model = MLPRegressor(hidden_layer_sizes=(nodes_m1,nodes_m1),
-                         max_iter=5000, random_state=42)
-    model.fit(Xs, ys)
+    Xs = scalerX.fit_transform(X)
+    ys = scalerY.fit_transform(y.reshape(-1, 1)).ravel()
+
+    modelA = MLPRegressor(
+        hidden_layer_sizes=(nodes_A, nodes_A),
+        max_iter=5000,
+        random_state=42
+    )
+    modelA.fit(Xs, ys)
+
+    modelB = MLPRegressor(
+        hidden_layer_sizes=(nodes_B, nodes_B),
+        max_iter=3000,
+        random_state=1
+    )
+    modelB.fit(Xs, ys)
 
     # ===== USER FIELD =====
-    H_user = st.number_input("Champ cible (Tesla)", 0.1, 10.0, 5.0)
+    H_user = st.number_input("Champ cible (T)", 0.1, 10.0, 5.0)
 
-    Xu = scaler_X.transform(np.column_stack([T, np.full_like(T,H_user)]))
-    M_u = scaler_y.inverse_transform(
-        model.predict(Xu).reshape(-1,1)
+    Xu = scalerX.transform(
+        np.column_stack([T, np.full_like(T, H_user)])
+    )
+
+    M_pred = scalerY.inverse_transform(
+        modelA.predict(Xu).reshape(-1, 1)
     ).ravel()
 
-    # ===== THERMO CALCULATIONS =====
-    dM_dT = [np.gradient(m,T) for m in [M_matrix[:,0],M_matrix[:,1],M_matrix[:,2],M_u]]
-    deltaS = np.trapezoid(dM_dT, x=[1,2,3,H_user], axis=0)
+    # ===== THERMODYNAMICS =====
+    dMdT = [
+        np.gradient(m, T)
+        for m in [M_exp[:, 0], M_exp[:, 1], M_exp[:, 2], M_pred]
+    ]
+
+    deltaS = np.trapezoid(
+        dMdT,
+        x=[1, 2, 3, H_user],
+        axis=0
+    )
 
     Smax = np.max(np.abs(deltaS))
     Tc = T[np.argmax(np.abs(deltaS))]
 
-    indices = np.where(np.abs(deltaS)>=Smax/2)[0]
+    idx = np.where(np.abs(deltaS) >= Smax / 2)[0]
 
-    if len(indices)>1:
-        FWHM = T[indices[-1]]-T[indices[0]]
-        RCP = Smax*FWHM
+    if len(idx) > 1:
+        FWHM = T[idx[-1]] - T[idx[0]]
+        RCP = Smax * FWHM
     else:
-        FWHM=0
-        RCP=0
+        FWHM = 0
+        RCP = 0
 
-    RC = np.trapezoid(np.abs(deltaS),T)
+    RC = np.trapezoid(np.abs(deltaS), T)
     q = RC
-    NRC = RCP/H_user if H_user!=0 else 0
 
-    # ===== ESTIMATION ΔTad =====
-    Cp = 400  # valeur moyenne J/kg.K
-    deltaTad = Smax*H_user/Cp
+    Cp = 400
+    deltaTad = Smax * H_user / Cp
 
-    # ===== EXPOSANT CRITIQUE n(T) =====
-    n_exp = np.gradient(np.log(np.abs(deltaS)+1e-6),
-                        np.log(H_user+1e-6))
+    n_exp = np.gradient(
+        np.log(np.abs(deltaS) + 1e-6),
+        np.log(H_user + 1e-6)
+    )
 
-    # ================= METRICS =================
-    col1,col2,col3,col4,col5 = st.columns(5)
-    col1.metric("ΔSmax", f"{Smax:.2f}")
-    col2.metric("RCP", f"{RCP:.1f}")
-    col3.metric("RC (q)", f"{q:.1f}")
-    col4.metric("ΔTad estimé", f"{deltaTad:.2f} K")
-    col5.metric("Tc", f"{Tc:.1f} K")
+    # ===== METRICS =====
+    m1, m2, m3, m4, m5 = st.columns(5)
+    m1.metric("ΔSmax", f"{Smax:.2f}")
+    m2.metric("RCP", f"{RCP:.1f}")
+    m3.metric("RC (q)", f"{q:.1f}")
+    m4.metric("ΔTad", f"{deltaTad:.2f} K")
+    m5.metric("Tc", f"{Tc:.1f} K")
 
-    # ================= TABLEAU COMPARATIF =================
-    st.subheader("📊 Comparaison IA vs Valeurs Théoriques")
+    # ===== COMPARISON TABLE =====
+    st.subheader("📊 Comparaison IA vs Théorie")
 
-    theo = theoretical_db[alloy_type]
+    theo = theoretical_db[alloy]
 
-    df_compare = pd.DataFrame({
-        "Paramètre":["ΔSmax","RCP"],
-        "IA":[Smax,RCP],
-        "Théorique":[theo["Smax"],theo["RCP"]],
-        "Écart %":[
-            100*(Smax-theo["Smax"])/theo["Smax"],
-            100*(RCP-theo["RCP"])/theo["RCP"]
+    df_comp = pd.DataFrame({
+        "Paramètre": ["ΔSmax", "RCP"],
+        "IA": [Smax, RCP],
+        "Théorie": [theo["Smax"], theo["RCP"]],
+        "Écart %": [
+            100 * (Smax - theo["Smax"]) / theo["Smax"],
+            100 * (RCP - theo["RCP"]) / theo["RCP"]
         ]
     })
 
-    st.dataframe(df_compare,use_container_width=True)
+    st.dataframe(df_comp, use_container_width=True)
 
-    # ================= TABS =================
-    tab1,tab2,tab3 = st.tabs([
-        "❄ Entropie & Refroidissement",
-        "🧲 Arrott",
-        "🌐 Surface 3D"
+    # ===== TABS =====
+    tab1, tab2, tab3, tab4, tab5 = st.tabs([
+        "📈 Magnétisation",
+        "❄ Thermodynamique",
+        "🧲 Arrott & Scaling",
+        "🌐 Surfaces 3D",
+        "🖼 Heatmap HD"
     ])
 
-    # ===== TAB 1 =====
+    # ================= TAB 1 =================
     with tab1:
-        fig,ax = plt.subplots(figsize=(7,4))
+        fig1, ax1 = plt.subplots()
 
-        ax.plot(T,np.abs(deltaS),label="|ΔS|",lw=2)
-        ax.axhline(Smax,color='red',ls='--',label="ΔSmax")
-        ax.axvspan(T[indices[0]] if len(indices)>1 else Tc,
-                   T[indices[-1]] if len(indices)>1 else Tc,
-                   alpha=0.2,label="FWHM")
+        colors = ["black", "red", "green", "blue"]
+        M_list = [M_exp[:, 0], M_exp[:, 1], M_exp[:, 2], M_pred]
+        H_list = [1, 2, 3, H_user]
 
-        ax.set_xlabel("T (K)")
-        ax.set_ylabel("ΔS")
-        ax.legend()
-        st.pyplot(fig)
+        for m, h, c in zip(M_list, H_list, colors):
+            ax1.plot(T, m, label=f"{h}T", color=c)
 
-        # Courbe RCP & q
-        fig2,ax2 = plt.subplots(figsize=(7,4))
-        ax2.plot(T,np.abs(deltaS),label="ΔS")
-        ax2.fill_between(T,np.abs(deltaS),alpha=0.3)
-        ax2.set_title("Visualisation graphique de RC (q)")
+        ax1.legend()
+        ax1.set_xlabel("T")
+        ax1.set_ylabel("M")
+        st.pyplot(fig1)
+
+        fig2, ax2 = plt.subplots()
+
+        for m, h, c in zip(M_list, H_list, colors):
+            mask = m > 0.1
+            ax2.plot(T[mask], h / m[mask], color=c)
+
+        ax2.set_xlabel("T")
+        ax2.set_ylabel("H/M")
         st.pyplot(fig2)
 
-    # ===== TAB 2 =====
+    # ================= TAB 2 =================
     with tab2:
-        mask = M_u>1e-6
-        Xf = (M_u[mask]**2).reshape(-1,1)
-        Yf = (H_user/M_u[mask]).reshape(-1,1)
+        figS, axS = plt.subplots()
+        axS.plot(T, np.abs(deltaS))
+        axS.fill_between(T, np.abs(deltaS), alpha=0.3)
+        st.pyplot(figS)
 
-        if len(Xf)>1:
-            reg = LinearRegression().fit(Xf,Yf)
+        TEC = [
+            np.mean(np.abs(deltaS)[
+                (T >= t - deltaT_tec / 2) &
+                (T <= t + deltaT_tec / 2)
+            ])
+            for t in T
+        ]
 
-            fig_ar,ax_ar = plt.subplots(figsize=(6,4))
-            ax_ar.scatter(Xf,Yf,s=10)
-            ax_ar.plot(Xf,reg.predict(Xf),color='red')
-            ax_ar.set_xlabel("M²")
-            ax_ar.set_ylabel("H/M")
-            st.pyplot(fig_ar)
+        figTEC, axTEC = plt.subplots()
+        axTEC.plot(T, TEC)
+        st.pyplot(figTEC)
 
-            pente = reg.coef_[0][0]
-            st.info(f"Transition {'2ème ordre' if pente>0 else '1er ordre'}")
+        figN, axN = plt.subplots()
+        axN.plot(T, n_exp)
+        st.pyplot(figN)
 
-    # ===== TAB 3 =====
+    # ================= TAB 3 =================
     with tab3:
-        H_range = np.linspace(0.1,H_user,40)
-        Tg,Hg = np.meshgrid(T,H_range)
+        mask = M_pred > 1e-6
+        Xf = (M_pred[mask] ** 2).reshape(-1, 1)
+        Yf = (H_user / M_pred[mask]).reshape(-1, 1)
 
-        Xsurf = scaler_X.transform(
-            np.column_stack([Tg.ravel(),Hg.ravel()])
+        if len(Xf) > 1:
+            reg = LinearRegression().fit(Xf, Yf)
+            figA, axA = plt.subplots()
+            axA.scatter(Xf, Yf, s=10)
+            axA.plot(Xf, reg.predict(Xf), color="red")
+            st.pyplot(figA)
+
+    # ================= TAB 4 =================
+    with tab4:
+        H_range = np.linspace(0.1, H_user, 40)
+        Tg, Hg = np.meshgrid(T, H_range)
+
+        Xsurf = scalerX.transform(
+            np.column_stack([Tg.ravel(), Hg.ravel()])
         )
 
-        Z = scaler_y.inverse_transform(
-            model.predict(Xsurf).reshape(-1,1)
-        ).reshape(len(H_range),len(T))
+        Z = scalerY.inverse_transform(
+            modelA.predict(Xsurf).reshape(-1, 1)
+        ).reshape(len(H_range), len(T))
 
-        fig3d = go.Figure(data=[go.Surface(z=Z,x=T,y=H_range)])
-        fig3d.update_layout(scene=dict(
-            xaxis_title='T (K)',
-            yaxis_title='H (T)',
-            zaxis_title='M'
-        ),height=600)
+        fig3d = go.Figure(
+            data=[go.Surface(z=Z, x=T, y=H_range)]
+        )
 
-        st.plotly_chart(fig3d,use_container_width=True)
+        st.plotly_chart(fig3d, use_container_width=True)
+
+    # ================= TAB 5 =================
+    with tab5:
+        Hfine = np.linspace(0.1, H_user, 100)
+        Tfine = np.linspace(T.min(), T.max(), 100)
+
+        Tg, Hg = np.meshgrid(Tfine, Hfine)
+
+        Xhd = scalerX.transform(
+            np.column_stack([Tg.ravel(), Hg.ravel()])
+        )
+
+        Mhd = scalerY.inverse_transform(
+            modelA.predict(Xhd).reshape(-1, 1)
+        ).reshape(len(Hfine), len(Tfine))
+
+        figHD, axHD = plt.subplots(figsize=(7, 5), dpi=300)
+        cont = axHD.contourf(Tfine, Hfine, Mhd, levels=60)
+        figHD.colorbar(cont)
+        st.pyplot(figHD)
+
+        buf = BytesIO()
+        figHD.savefig(buf, format="png", dpi=300)
+        buf.seek(0)
+
+        st.download_button(
+            "📥 Télécharger PNG HD",
+            data=buf,
+            file_name="Structure_HD.png"
+        )
 
     # ================= EXPORT =================
     df_export = pd.DataFrame({
-        "T":T,
-        "M_pred":M_u,
-        "DeltaS":deltaS,
-        "n(T)":n_exp
+        "T": T,
+        "M_pred": M_pred,
+        "DeltaS": deltaS,
+        "n(T)": n_exp
     })
 
     st.download_button(
-        "📥 Télécharger Résultats Excel",
+        "📥 Télécharger CSV",
         data=df_export.to_csv(index=False),
-        file_name="Magneto_Expert_PRO.csv"
+        file_name="Magneto_PRO.csv"
     )
-
-

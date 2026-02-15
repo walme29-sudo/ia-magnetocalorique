@@ -85,7 +85,7 @@ if file:
     # deltaS = np.trapz(dM_dT_stack, x=H_all, axis=0)
     deltaS = np.zeros(len(T))
         for i in range(len(H_all)-1):
-            deltaS += 0.5 * (dM_dT_stack[i+1]+dM_dT_stack[i])*(H_all[i+1]-H_all[i])
+        deltaS += 0.5 * (dM_dT_stack[i+1]+dM_dT_stack[i])*(H_all[i+1]-H_all[i])
     Smax = np.max(np.abs(deltaS))
     Tc = T[np.argmax(np.abs(deltaS))]
 
@@ -137,6 +137,7 @@ if file:
     df_ex = pd.DataFrame({"T":T,"M_pred":M_pred,"ΔS":deltaS})
     df_st = pd.DataFrame({"Param":["Smax","RCP","RC","NRC","Tc"],"Valeur":[Smax,RCP,RC,NRC,Tc]})
     st.download_button("📥 Télécharger Excel", data=to_excel(df_ex, df_st), file_name="Magneto_IA.xlsx")
+
 
 
 

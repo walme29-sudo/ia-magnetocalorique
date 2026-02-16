@@ -61,24 +61,39 @@ if file:
         results = {}
 
         for h in fields:
+            # 1. Prédiction de la magnétisation pour le champ h
             X_p = sc_X.transform(np.column_stack([T, np.full_like(T, h)]))
             M_p = sc_y.inverse_transform(model.predict(X_p).reshape(-1, 1)).ravel()
-            dM_dT = np.gradient(M_p, T)
-            # Delta S par intégration de Maxwell
-            ds = np.abs(np.trapezoid([np.gradient(scaler_y.inverse_transform(model.predict(scaler_X.transform(np.column_stack([T, np.full_like(T, h_i)]))).reshape(-1,1)).ravel(), T) for h_i in np.linspace(0, h, 10)], x=np.linspace(0, h, 10), axis=0))
             
+            # 2. Calcul du gradient dM/dT
+            dM_dT = np.gradient(M_p, T)
+            
+            # 3. Calcul de Delta S (Maxwell) 
+            # On intègre le gradient dM/dT de 0 à H
+            # Approximation de l'intégrale numérique pour le champ h
+            h_steps = np.linspace(0, h, 15)
+            gradients = []
+            for hi in h_steps:
+                Xi = sc_X.transform(np.column_stack([T, np.full_like(T, hi)]))
+                Mi = sc_y.inverse_transform(model.predict(Xi).reshape(-1, 1)).ravel()
+                gradients.append(np.gradient(Mi, T))
+            
+            ds = np.abs(np.trapezoid(gradients, x=h_steps, axis=0))
+            
+            # --- Suite des calculs (s_max, tc, dt_ad, theta) ---
             s_max = np.max(ds)
             tc = T[np.argmax(ds)]
-            # Delta Tad = -(T/Cp) * DeltaS
             dt_ad = (T * ds) / cp_const
             
-            # Master Curve préparation
+            # Master Curve préparation sécurisée
             idx_r = np.where(ds >= s_max/2)[0]
-            tr1, tr2 = (T[idx_r[0]], T[idx_r[-1]]) if len(idx_r) > 1 else (T[0], T[-1])
-            theta = np.where(T <= tc, -(T - tc) / (tr1 - tc + 1e-5), (T - tc) / (tr2 - tc + 1e-5))
+            if len(idx_r) > 1:
+                tr1, tr2 = T[idx_r[0]], T[idx_r[-1]]
+                theta = np.where(T <= tc, -(T - tc) / (tr1 - tc + 1e-5), (T - tc) / (tr2 - tc + 1e-5))
+            else:
+                theta = T - tc # Fallback si FWHM non calculable
             
             results[h] = {'M': M_p, 'dM': dM_dT, 'ds': ds, 'dt_ad': dt_ad, 's_max': s_max, 'tc': tc, 'theta': theta}
-
         # ================= AFFICHAGE DES ONGLETS =================
         tab1, tab2, tab3, tab4, tab5 = st.tabs([
             "📈 Magnétisme (M, dM/dT)", 
@@ -139,4 +154,5 @@ if file:
 
 else:
     st.info("👋 Charge ton CSV pour voir toutes les courbes s'afficher !")
+
 

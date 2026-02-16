@@ -65,7 +65,7 @@ if file:
             M_p = sc_y.inverse_transform(model.predict(X_p).reshape(-1, 1)).ravel()
             dM_dT = np.gradient(M_p, T)
             # Delta S par intégration de Maxwell
-            ds = np.abs(np.trapz([np.gradient(scaler_y.inverse_transform(model.predict(scaler_X.transform(np.column_stack([T, np.full_like(T, h_i)]))).reshape(-1,1)).ravel(), T) for h_i in np.linspace(0, h, 10)], x=np.linspace(0, h, 10), axis=0))
+            ds = np.abs(np.trapezoid([np.gradient(scaler_y.inverse_transform(model.predict(scaler_X.transform(np.column_stack([T, np.full_like(T, h_i)]))).reshape(-1,1)).ravel(), T) for h_i in np.linspace(0, h, 10)], x=np.linspace(0, h, 10), axis=0))
             
             s_max = np.max(ds)
             tc = T[np.argmax(ds)]
@@ -139,3 +139,4 @@ if file:
 
 else:
     st.info("👋 Charge ton CSV pour voir toutes les courbes s'afficher !")
+

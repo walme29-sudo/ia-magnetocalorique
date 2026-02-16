@@ -97,7 +97,7 @@ if file:
     dM_dT_list.append(np.gradient(M_pred, T))
     H_all = np.append(H_known, h_target)
     
-    deltaS = np.trapz(dM_dT_list, x=H_all, axis=0)
+    deltaS = np.trapezoid(dM_dT_list, x=H_all, axis=0)
     abs_ds = np.abs(deltaS)
     s_max = np.max(abs_ds)
     tc = T[np.argmax(abs_ds)]
@@ -158,3 +158,4 @@ if file:
 
 else:
     st.info("👋 Veuillez uploader un fichier CSV contenant les colonnes T et M_xT pour démarrer.")
+

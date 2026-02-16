@@ -17,9 +17,17 @@ def to_excel(df_list, sheet_names):
             df.to_excel(writer, sheet_name=name, index=False)
     return output.getvalue()
 
-# ================= HEADER =================
-st.title("🧲 Plateforme d'Analyse Magnétocalorique Intégrale")
-st.markdown("**Développeur : DALHOUMI WALID** | Système d'Analyse par Intelligence Artificielle")
+# ====== HEADER ======
+col_logo, col_title = st.columns([1,5])
+with col_logo:
+    try:
+        st.image("logo.png", width=80)
+    except:
+        st.markdown("### 🧲")  # emoji aimant si logo absent
+with col_title:
+    st.markdown("## IA Magnétocalorique - Analyse Expert")
+    st.markdown("**Développeur : DALHOUMI WALID**")
+
 st.divider()
 
 # ================= SIDEBAR =================
@@ -154,5 +162,6 @@ if file:
 
 else:
     st.info("👋 Charge ton CSV pour voir toutes les courbes s'afficher !")
+
 
 
